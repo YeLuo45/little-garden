@@ -17,22 +17,28 @@
   </div>
 
   <!-- 游戏画布容器 -->
-  <div id="game-container" style="display: none;">
-    <canvas id="gameCanvas"></canvas>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="720" height="1280"></canvas>
   </div>
 
   <!-- 游戏脚本 -->
   <script src="game.js"></script>
   <script>
-    // 等待游戏初始化
     window.addEventListener('load', () => {
-      const game = startGame('gameCanvas');
+      try {
+        const game = startGame('gameCanvas');
 
-      // 加载完成后隐藏加载界面，显示游戏
-      setTimeout(() => {
-        document.getElementById('loading-screen').style.display = 'none';
-        document.getElementById('game-container').style.display = 'block';
-      }, 500);
+        setTimeout(() => {
+          const loading = document.getElementById('loading-screen');
+          const container = document.getElementById('game-container');
+          if (loading) loading.style.display = 'none';
+          if (container) container.style.display = 'flex';
+        }, 800);
+      } catch (e) {
+        console.error('Game failed to start:', e);
+        document.getElementById('loading-screen').innerHTML =
+          '<div class="loading-content"><p class="loading-text">游戏加载失败</p></div>';
+      }
     });
   </script>
 </body>

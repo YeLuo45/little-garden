@@ -50,6 +50,93 @@ const SceneType = {
 };
 
 // ============================================================
+// 音频管理器
+// ============================================================
+class AudioManager {
+  constructor() {
+    this.ctx = null;
+    this.masterGain = null;
+    this.enabled = true;
+    this._init();
+  }
+
+  _init() {
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.masterGain = this.ctx.createGain();
+      this.masterGain.gain.value = 0.3;
+      this.masterGain.connect(this.ctx.destination);
+    } catch (e) {
+      console.warn('Audio not supported:', e);
+    }
+  }
+
+  _resume() {
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playTone(freq, duration, type = 'sine', volume = 0.3) {
+    if (!this.enabled || !this.ctx) return;
+    this._resume();
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start();
+    osc.stop(this.ctx.currentTime + duration);
+  }
+
+  playSFX(type) {
+    if (!this.enabled) return;
+    this._resume();
+
+    switch (type) {
+      case 'click':
+        this.playTone(800, 0.1, 'sine', 0.2);
+        setTimeout(() => this.playTone(1000, 0.1, 'sine', 0.2), 50);
+        break;
+      case 'success':
+        this.playTone(523, 0.15, 'sine', 0.3);
+        setTimeout(() => this.playTone(659, 0.15, 'sine', 0.3), 100);
+        setTimeout(() => this.playTone(784, 0.2, 'sine', 0.3), 200);
+        break;
+      case 'error':
+        this.playTone(200, 0.2, 'square', 0.15);
+        setTimeout(() => this.playTone(150, 0.3, 'square', 0.15), 150);
+        break;
+      case 'coin':
+        this.playTone(988, 0.1, 'sine', 0.2);
+        setTimeout(() => this.playTone(1319, 0.15, 'sine', 0.2), 80);
+        break;
+      case 'water':
+        // 模拟水流
+        if (this.ctx) {
+          const bufferSize = this.ctx.sampleRate * 0.3;
+          const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+          const data = buffer.getChannelData(0);
+          for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.1;
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buffer;
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+          noise.connect(gain);
+          gain.connect(this.masterGain);
+          noise.start();
+        }
+        break;
+    }
+  }
+}
+
+// ============================================================
 // 工具函数
 // ============================================================
 const Utils = {
@@ -160,6 +247,15 @@ const Storage = {
           { id: 'seed_tulip', name: '郁金香种子', count: 2, price: 30 },
         ],
         items: [],
+      },
+      pet: {
+        name: '小白',
+        type: 'dog',
+        hunger: 80,
+        happiness: 80,
+        health: 100,
+        lastFed: Date.now(),
+        lastPlayed: Date.now(),
       },
       statistics: {
         totalPlayed: 0,
@@ -1661,7 +1757,7 @@ class GardenScene extends Scene {
     });
     coinText.name = 'coinText';
     this.uiElements.push(coinText);
-    
+
     const gemText = new Text(150, 20, `宝石: ${Storage.data.player.gems}`, {
       fontSize: 20,
       color: '#9C27B0',
@@ -1669,17 +1765,20 @@ class GardenScene extends Scene {
     });
     gemText.name = 'gemText';
     this.uiElements.push(gemText);
-    
+
     // 商店按钮
     const shopBtn = new Button(CONFIG.CANVAS_WIDTH - 120, 20, 100, 40, '商店');
     shopBtn.onClick = () => this.game.changeScene(SceneType.SHOP);
     this.uiElements.push(shopBtn);
-    
+
     // 背包按钮
     const invBtn = new Button(CONFIG.CANVAS_WIDTH - 230, 20, 100, 40, '背包');
     invBtn.onClick = () => this.game.changeScene(SceneType.INVENTORY);
     this.uiElements.push(invBtn);
-    
+
+    // 宠物区域 - 顶部
+    this._createPetUI();
+
     // 土地说明
     const hintText = new Text(CONFIG.CANVAS_WIDTH / 2, 200, '点击空地播种', {
       fontSize: 18,
@@ -1687,6 +1786,274 @@ class GardenScene extends Scene {
       align: 'center',
     });
     this.uiElements.push(hintText);
+  }
+
+  _createPetUI() {
+    // 宠物区域背景
+    const petBg = {
+      x: 60,
+      y: 60,
+      width: 200,
+      height: 120,
+      isPetArea: true,
+      petX: 120,
+      petY: 140,
+      petSize: 50,
+      render: function(ctx) {
+        // 宠物窝背景
+        ctx.fillStyle = '#FFF8E1';
+        ctx.strokeStyle = '#8D6E63';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(this.x, this.y, this.width, this.height, 15);
+        ctx.fill();
+        ctx.stroke();
+
+        // 绘制宠物
+        const pet = Storage.data.pet;
+        this._drawPet(ctx, this.petX, this.petY, this.petSize, pet);
+      },
+      _drawPet: function(ctx, x, y, size, pet) {
+        ctx.save();
+        ctx.translate(x, y);
+
+        if (pet.type === 'dog') {
+          // 小狗 - 白色
+          // 身体
+          ctx.fillStyle = '#FFFFFF';
+          ctx.strokeStyle = '#5D4037';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, size * 0.6, size * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // 头
+          ctx.beginPath();
+          ctx.arc(0, -size * 0.4, size * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // 耳朵
+          ctx.beginPath();
+          ctx.ellipse(-size * 0.3, -size * 0.6, size * 0.15, size * 0.2, -0.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(size * 0.3, -size * 0.6, size * 0.15, size * 0.2, 0.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // 眼睛
+          ctx.fillStyle = '#3E2723';
+          ctx.beginPath();
+          ctx.arc(-size * 0.15, -size * 0.45, size * 0.08, 0, Math.PI * 2);
+          ctx.arc(size * 0.15, -size * 0.45, size * 0.08, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 眼睛高光
+          ctx.fillStyle = '#FFFFFF';
+          ctx.beginPath();
+          ctx.arc(-size * 0.18, -size * 0.48, size * 0.03, 0, Math.PI * 2);
+          ctx.arc(size * 0.12, -size * 0.48, size * 0.03, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 鼻子
+          ctx.fillStyle = '#3E2723';
+          ctx.beginPath();
+          ctx.ellipse(0, -size * 0.3, size * 0.08, size * 0.06, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 嘴巴 - 根据心情
+          ctx.strokeStyle = '#5D4037';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          if (pet.happiness > 60) {
+            ctx.arc(0, -size * 0.2, size * 0.15, 0.1 * Math.PI, 0.9 * Math.PI);
+          } else if (pet.happiness > 30) {
+            ctx.moveTo(-size * 0.15, -size * 0.2);
+            ctx.lineTo(size * 0.15, -size * 0.2);
+          } else {
+            ctx.arc(0, -size * 0.1, size * 0.15, 1.1 * Math.PI, 1.9 * Math.PI);
+          }
+          ctx.stroke();
+
+          // 尾巴
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(size * 0.5, 0);
+          ctx.quadraticCurveTo(size * 0.8, -size * 0.3, size * 0.6, -size * 0.5);
+          ctx.stroke();
+
+        } else if (pet.type === 'cat') {
+          // 小猫 - 橙色
+          // 身体
+          ctx.fillStyle = '#FF9800';
+          ctx.strokeStyle = '#5D4037';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, size * 0.5, size * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // 头
+          ctx.beginPath();
+          ctx.arc(0, -size * 0.35, size * 0.35, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          // 耳朵（三角形）
+          ctx.fillStyle = '#FF9800';
+          ctx.beginPath();
+          ctx.moveTo(-size * 0.35, -size * 0.5);
+          ctx.lineTo(-size * 0.2, -size * 0.8);
+          ctx.lineTo(-size * 0.05, -size * 0.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(size * 0.35, -size * 0.5);
+          ctx.lineTo(size * 0.2, -size * 0.8);
+          ctx.lineTo(size * 0.05, -size * 0.5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+
+          // 眼睛
+          ctx.fillStyle = '#3E2723';
+          ctx.beginPath();
+          ctx.ellipse(-size * 0.12, -size * 0.38, size * 0.06, size * 0.1, 0, 0, Math.PI * 2);
+          ctx.ellipse(size * 0.12, -size * 0.38, size * 0.06, size * 0.1, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 鼻子
+          ctx.fillStyle = '#F48FB1';
+          ctx.beginPath();
+          ctx.moveTo(0, -size * 0.28);
+          ctx.lineTo(-size * 0.05, -size * 0.22);
+          ctx.lineTo(size * 0.05, -size * 0.22);
+          ctx.closePath();
+          ctx.fill();
+
+          // 胡须
+          ctx.strokeStyle = '#5D4037';
+          ctx.lineWidth = 1;
+          for (let i = -1; i <= 1; i += 2) {
+            ctx.beginPath();
+            ctx.moveTo(i * size * 0.1, -size * 0.25);
+            ctx.lineTo(i * size * 0.4, -size * 0.3);
+            ctx.stroke();
+          }
+
+          // 尾巴
+          ctx.strokeStyle = '#FF9800';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(size * 0.4, 0);
+          ctx.quadraticCurveTo(size * 0.7, -size * 0.2, size * 0.6, -size * 0.5);
+          ctx.stroke();
+        }
+
+        // 心情图标
+        ctx.font = '16px Arial';
+        ctx.textAlign = 'center';
+        if (pet.happiness > 60) {
+          ctx.fillText('😊', 0, size * 0.7);
+        } else if (pet.happiness > 30) {
+          ctx.fillText('😐', 0, size * 0.7);
+        } else {
+          ctx.fillText('😢', 0, size * 0.7);
+        }
+
+        ctx.restore();
+      },
+      contains: function(x, y) {
+        return x >= this.x && x <= this.x + this.width &&
+               y >= this.y && y <= this.y + this.height;
+      },
+      onClick: function(x, y) {
+        // 点击宠物时播放音效并增加好感
+        Storage.data.pet.happiness = Math.min(100, Storage.data.pet.happiness + 5);
+        Storage.save();
+        game.tweens.add(this, { scale: 1.1 }, 200, 'easeOut', false, function() {
+          game.tweens.add(this, { scale: 1.0 }, 200, 'easeIn');
+        });
+      }
+    };
+    this.uiElements.push(petBg);
+
+    // 宠物状态条
+    const pet = Storage.data.pet;
+
+    // 饥饿条
+    const hungerBg = { x: 60, y: 190, width: 90, height: 12, render: function(ctx) {
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.roundRect(this.x, this.y, this.width, this.height, 6);
+      ctx.fill();
+      ctx.fillStyle = '#FF9800';
+      ctx.beginPath();
+      ctx.roundRect(this.x, this.y, this.width * (pet.hunger / 100), this.height, 6);
+      ctx.fill();
+      ctx.font = '10px Arial';
+      ctx.fillStyle = '#FFF';
+      ctx.textAlign = 'center';
+      ctx.fillText('饥饿', this.x + this.width / 2, this.y + 10);
+    }};
+    this.uiElements.push(hungerBg);
+
+    // 心情条
+    const happyBg = { x: 170, y: 190, width: 90, height: 12, render: function(ctx) {
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.roundRect(this.x, this.y, this.width, this.height, 6);
+      ctx.fill();
+      ctx.fillStyle = '#E91E63';
+      ctx.beginPath();
+      ctx.roundRect(this.x, this.y, this.width * (pet.happiness / 100), this.height, 6);
+      ctx.fill();
+      ctx.font = '10px Arial';
+      ctx.fillStyle = '#FFF';
+      ctx.textAlign = 'center';
+      ctx.fillText('心情', this.x + this.width / 2, this.y + 10);
+    }};
+    this.uiElements.push(happyBg);
+
+    // 宠物操作按钮
+    const feedBtn = new Button(60, 210, 60, 30, '喂食');
+    feedBtn.onClick = () => {
+      if (Storage.data.player.gems >= 5) {
+        Storage.data.player.gems -= 5;
+        Storage.data.pet.hunger = Math.min(100, Storage.data.pet.hunger + 30);
+        Storage.data.pet.happiness = Math.min(100, Storage.data.pet.happiness + 10);
+        Storage.save();
+        game.audio.playSFX('coin');
+        game.particleSystem.burst(120, 140, '#FFD700', 10);
+      }
+    };
+    this.uiElements.push(feedBtn);
+
+    const petBtn = new Button(130, 210, 60, 30, '抚摸');
+    petBtn.onClick = () => {
+      Storage.data.pet.happiness = Math.min(100, Storage.data.pet.happiness + 15);
+      Storage.data.pet.lastPlayed = Date.now();
+      Storage.save();
+      game.audio.playSFX('success');
+      game.particleSystem.burst(120, 140, '#F48FB1', 8);
+    };
+    this.uiElements.push(petBtn);
+
+    const playBtn = new Button(200, 210, 60, 30, '玩耍');
+    playBtn.onClick = () => {
+      Storage.data.pet.happiness = Math.min(100, Storage.data.pet.happiness + 20);
+      Storage.data.pet.lastPlayed = Date.now();
+      Storage.save();
+      game.audio.playSFX('success');
+      game.particleSystem.burst(120, 140, '#4FC3F7', 12);
+    };
+    this.uiElements.push(playBtn);
   }
   
   update(dt) {
@@ -2621,6 +2988,7 @@ class Game {
     this.inputManager = new InputManager(this);
     this.tweens = new TweenManager();
     this.particleSystem = new ParticleSystem();
+    this.audio = new AudioManager();
     
     // 场景管理
     this.scenes = {};
