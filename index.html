@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>小花园 - 儿童成长陪伴游戏</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 加载界面 -->
+  <div id="loading-screen">
+    <div class="loading-content">
+      <h1 class="loading-title">小花园</h1>
+      <div class="loading-spinner"></div>
+      <p class="loading-text">正在加载...</p>
+    </div>
+  </div>
+
+  <!-- 游戏画布容器 -->
+  <div id="game-container" style="display: none;">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <!-- 游戏脚本 -->
+  <script src="game.js"></script>
+  <script>
+    // 等待游戏初始化
+    window.addEventListener('load', () => {
+      const game = startGame('gameCanvas');
+
+      // 加载完成后隐藏加载界面，显示游戏
+      setTimeout(() => {
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'block';
+      }, 500);
+    });
+  </script>
+</body>
+</html>
