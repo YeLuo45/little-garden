@@ -3168,6 +3168,11 @@ class Game {
   }
   
   changeScene(sceneName, data = null, withTransition = true) {
+    // 防御性检查：忽略无效的场景名
+    if (!sceneName) {
+      console.warn('changeScene called with invalid sceneName:', sceneName);
+      return;
+    }
     this.pendingSceneChange = sceneName;
     this.sceneChangeData = data;
     
@@ -3211,6 +3216,8 @@ class Game {
     const newScene = this.scenes[newSceneName];
     if (!newScene) {
       console.error(`Scene "${newSceneName}" not found`);
+      this.pendingSceneChange = null;
+      this.sceneChangeData = null;
       return;
     }
     
