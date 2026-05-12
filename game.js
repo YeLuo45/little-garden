@@ -5548,6 +5548,11 @@ class Game {
     this.scenes[SceneType.SHOP] = new ShopScene(this);
     this.scenes[SceneType.INVENTORY] = new InventoryScene(this);
     this.scenes[SceneType.SETTINGS] = new SettingsScene(this);
+    this.scenes[SceneType.MATH_GARDEN] = new MathGardenScene(this);
+    this.scenes[SceneType.CHINESE_GARDEN] = new ChineseGardenScene(this);
+    this.scenes[SceneType.ENGLISH_GARDEN] = new EnglishGardenScene(this);
+    this.scenes[SceneType.LOGIC_GARDEN] = new LogicGardenScene(this);
+    this.scenes[SceneType.LEARNING] = new LearningScene(this);
     
     // 初始化所有场景
     for (const name in this.scenes) {
@@ -5710,6 +5715,14 @@ class Game {
   
   _doSceneChange() {
     const newSceneName = this.pendingSceneChange;
+    
+    // 防御性检查：忽略无效的场景名
+    if (!newSceneName) {
+      console.warn('changeScene: invalid sceneName:', newSceneName);
+      this.pendingSceneChange = null;
+      this.sceneChangeData = null;
+      return;
+    }
     
     // 退出当前场景
     if (this.currentScene) {
