@@ -10,17 +10,18 @@ const CONFIG = {
   // 画布
   CANVAS_WIDTH: 720,
   CANVAS_HEIGHT: 1280,
-  
+
   // 物理
   GRAVITY: 0.5,
   FRICTION: 0.98,
-  
+
   // 动画
   DEFAULT_FPS: 60,
   FIXED_TIMESTEP: 1000 / 60,
-  
+
   // 存储键名
   STORAGE_KEY: 'little_garden_save',
+  LEARNING_PROGRESS_KEY: 'little_garden_learning_progress',
 };
 
 // ============================================================
@@ -47,6 +48,11 @@ const SceneType = {
   SHOP: 'shop',
   INVENTORY: 'inventory',
   SETTINGS: 'settings',
+  MATH_GARDEN: 'math_garden',
+  CHINESE_GARDEN: 'chinese_garden',
+  ENGLISH_GARDEN: 'english_garden',
+  LOGIC_GARDEN: 'logic_garden',
+  LEARNING: 'learning',
 };
 
 // ============================================================
@@ -325,7 +331,728 @@ const Storage = {
       obj = obj[key];
     }
     obj[keys[keys.length - 1]] = value;
+  }
+};
+
+// ============================================================
+// 学习进度管理器
+// ============================================================
+const LearningProgress = {
+  data: {},
+
+  init() {
+    try {
+      const saved = localStorage.getItem(CONFIG.LEARNING_PROGRESS_KEY);
+      if (saved) {
+        this.data = JSON.parse(saved);
+      } else {
+        this.data = this.getDefaultData();
+      }
+    } catch (e) {
+      console.warn('LearningProgress init failed:', e);
+      this.data = this.getDefaultData();
+    }
   },
+
+  getDefaultData() {
+    return {
+      levels: {},
+      totalStars: 0,
+    };
+  },
+
+  save() {
+    try {
+      localStorage.setItem(CONFIG.LEARNING_PROGRESS_KEY, JSON.stringify(this.data));
+      return true;
+    } catch (e) {
+      console.warn('LearningProgress save failed:', e);
+      return false;
+    }
+  },
+
+  setLevelStars(subject, level, stars) {
+    const key = `${subject}_${level}`;
+    const existing = this.data.levels[key] || 0;
+    if (stars > existing) {
+      this.data.levels[key] = stars;
+      this.save();
+    }
+  },
+
+  getLevelStars(subject, level) {
+    const key = `${subject}_${level}`;
+    return this.data.levels[key] || 0;
+  },
+
+  isLevelUnlocked(subject, level) {
+    // Level 1 is always unlocked, or previous level has at least 1 star
+    if (level === 1) return true;
+    return this.getLevelStars(subject, level - 1) > 0;
+  },
+
+  getTotalStars() {
+    let total = 0;
+    for (const key in this.data.levels) {
+      total += this.data.levels[key];
+    }
+    return total;
+  },
+};
+
+// ============================================================
+// 题目数据
+// ============================================================
+const QuestionData = {
+  // 数学题目
+  math: {
+    // 数数
+    counting_1: {
+      name: '数数 L1',
+      type: 'counting',
+      difficulty: 1,
+      questions: [
+        { question: '数一数有几个苹果', display: 'image', correct: 3, options: [2, 3, 4, 5], imageType: 'apple', imageCount: 3 },
+        { question: '数一数有几朵花', display: 'image', correct: 2, options: [1, 2, 3, 4], imageType: 'flower', imageCount: 2 },
+        { question: '数一数有几个星星', display: 'image', correct: 5, options: [3, 4, 5, 6], imageType: 'star', imageCount: 5 },
+        { question: '数一数有几个气球', display: 'image', correct: 4, options: [2, 3, 4, 5], imageType: 'balloon', imageCount: 4 },
+        { question: '数一数有几只小鸟', display: 'image', correct: 1, options: [1, 2, 3, 4], imageType: 'bird', imageCount: 1 },
+      ]
+    },
+    counting_2: {
+      name: '数数 L2',
+      type: 'counting',
+      difficulty: 2,
+      questions: [
+        { question: '数一数有几个水果', display: 'image', correct: 7, options: [5, 6, 7, 8], imageType: 'mixed', imageCount: 7 },
+        { question: '数一数有几颗糖果', display: 'image', correct: 9, options: [7, 8, 9, 10], imageType: 'candy', imageCount: 9 },
+        { question: '数一数有几片树叶', display: 'image', correct: 6, options: [4, 5, 6, 7], imageType: 'leaf', imageCount: 6 },
+        { question: '数一数有几只蝴蝶', display: 'image', correct: 8, options: [6, 7, 8, 9], imageType: 'butterfly', imageCount: 8 },
+        { question: '数一数有几个球', display: 'image', correct: 10, options: [8, 9, 10, 11], imageType: 'ball', imageCount: 10 },
+      ]
+    },
+    counting_3: {
+      name: '数数 L3',
+      type: 'counting',
+      difficulty: 3,
+      questions: [
+        { question: '数一数有多少个物品', display: 'image', correct: 15, options: [12, 14, 15, 18], imageType: 'mixed', imageCount: 15 },
+        { question: '数一数有多少颗星星', display: 'image', correct: 18, options: [15, 17, 18, 20], imageType: 'star', imageCount: 18 },
+        { question: '数一数有多少个圆圈', display: 'image', correct: 12, options: [10, 11, 12, 13], imageType: 'circle', imageCount: 12 },
+        { question: '数一数有多少个方形', display: 'image', correct: 20, options: [18, 19, 20, 21], imageType: 'square', imageCount: 20 },
+        { question: '数一数有多少个三角形', display: 'image', correct: 16, options: [14, 15, 16, 17], imageType: 'triangle', imageCount: 16 },
+      ]
+    },
+    // 加法
+    addition_1: {
+      name: '加法 L1',
+      type: 'arithmetic',
+      difficulty: 1,
+      questions: [
+        { question: '1 + 1 = ?', display: 'text', correct: 2, options: [1, 2, 3, 4] },
+        { question: '2 + 1 = ?', display: 'text', correct: 3, options: [2, 3, 4, 5] },
+        { question: '1 + 3 = ?', display: 'text', correct: 4, options: [2, 3, 4, 5] },
+        { question: '2 + 2 = ?', display: 'text', correct: 4, options: [3, 4, 5, 6] },
+        { question: '3 + 1 = ?', display: 'text', correct: 4, options: [3, 4, 5, 6] },
+      ]
+    },
+    addition_2: {
+      name: '加法 L2',
+      type: 'arithmetic',
+      difficulty: 2,
+      questions: [
+        { question: '5 + 3 = ?', display: 'text', correct: 8, options: [6, 7, 8, 9] },
+        { question: '4 + 4 = ?', display: 'text', correct: 8, options: [6, 7, 8, 9] },
+        { question: '6 + 2 = ?', display: 'text', correct: 8, options: [6, 7, 8, 9] },
+        { question: '7 + 3 = ?', display: 'text', correct: 10, options: [8, 9, 10, 11] },
+        { question: '9 + 1 = ?', display: 'text', correct: 10, options: [8, 9, 10, 11] },
+      ]
+    },
+    addition_3: {
+      name: '加法 L3',
+      type: 'arithmetic',
+      difficulty: 3,
+      questions: [
+        { question: '12 + 8 = ?', display: 'text', correct: 20, options: [18, 19, 20, 21] },
+        { question: '15 + 7 = ?', display: 'text', correct: 22, options: [20, 21, 22, 23] },
+        { question: '25 + 15 = ?', display: 'text', correct: 40, options: [38, 39, 40, 41] },
+        { question: '33 + 12 = ?', display: 'text', correct: 45, options: [43, 44, 45, 46] },
+        { question: '48 + 22 = ?', display: 'text', correct: 70, options: [68, 69, 70, 71] },
+      ]
+    },
+    // 减法
+    subtraction_1: {
+      name: '减法 L1',
+      type: 'arithmetic',
+      difficulty: 1,
+      questions: [
+        { question: '3 - 1 = ?', display: 'text', correct: 2, options: [1, 2, 3, 4] },
+        { question: '4 - 2 = ?', display: 'text', correct: 2, options: [1, 2, 3, 4] },
+        { question: '5 - 1 = ?', display: 'text', correct: 4, options: [2, 3, 4, 5] },
+        { question: '2 - 1 = ?', display: 'text', correct: 1, options: [0, 1, 2, 3] },
+        { question: '4 - 3 = ?', display: 'text', correct: 1, options: [0, 1, 2, 3] },
+      ]
+    },
+    subtraction_2: {
+      name: '减法 L2',
+      type: 'arithmetic',
+      difficulty: 2,
+      questions: [
+        { question: '8 - 3 = ?', display: 'text', correct: 5, options: [3, 4, 5, 6] },
+        { question: '9 - 4 = ?', display: 'text', correct: 5, options: [3, 4, 5, 6] },
+        { question: '10 - 5 = ?', display: 'text', correct: 5, options: [3, 4, 5, 6] },
+        { question: '7 - 2 = ?', display: 'text', correct: 5, options: [3, 4, 5, 6] },
+        { question: '6 - 1 = ?', display: 'text', correct: 5, options: [3, 4, 5, 6] },
+      ]
+    },
+    subtraction_3: {
+      name: '减法 L3',
+      type: 'arithmetic',
+      difficulty: 3,
+      questions: [
+        { question: '20 - 8 = ?', display: 'text', correct: 12, options: [10, 11, 12, 13] },
+        { question: '35 - 15 = ?', display: 'text', correct: 20, options: [18, 19, 20, 21] },
+        { question: '50 - 25 = ?', display: 'text', correct: 25, options: [23, 24, 25, 26] },
+        { question: '48 - 19 = ?', display: 'text', correct: 29, options: [27, 28, 29, 30] },
+        { question: '73 - 38 = ?', display: 'text', correct: 35, options: [33, 34, 35, 36] },
+      ]
+    },
+    // 形状
+    shape_1: {
+      name: '形状 L1',
+      type: 'shape',
+      difficulty: 1,
+      questions: [
+        { question: '这是什么形状？', display: 'image', correct: 0, options: ['圆形', '方形'], imageType: 'circle' },
+        { question: '这是什么形状？', display: 'image', correct: 1, options: ['圆形', '方形'], imageType: 'square' },
+        { question: '找出圆形', display: 'image', correct: 0, options: ['圆形', '方形'], imageType: 'circle' },
+        { question: '找出方形', display: 'image', correct: 1, options: ['圆形', '方形'], imageType: 'square' },
+        { question: '哪个是圆形？', display: 'image', correct: 0, options: ['圆形', '方形'], imageType: 'circle' },
+      ]
+    },
+    shape_2: {
+      name: '形状 L2',
+      type: 'shape',
+      difficulty: 2,
+      questions: [
+        { question: '这是什么形状？', display: 'image', correct: 2, options: ['圆形', '方形', '三角形'], imageType: 'triangle' },
+        { question: '找出三角形', display: 'image', correct: 2, options: ['圆形', '方形', '三角形'], imageType: 'triangle' },
+        { question: '这是什么形状？', display: 'image', correct: 0, options: ['圆形', '方形', '三角形'], imageType: 'circle' },
+        { question: '哪个不是圆形？', display: 'image', correct: 1, options: ['圆形', '方形', '三角形'], imageType: 'square' },
+        { question: '这是什么形状？', display: 'image', correct: 1, options: ['圆形', '方形', '三角形'], imageType: 'square' },
+      ]
+    },
+    shape_3: {
+      name: '形状 L3',
+      type: 'shape',
+      difficulty: 3,
+      questions: [
+        { question: '这是什么形状？', display: 'image', correct: 3, options: ['五边形', '六边形', '七边形', '八边形'], imageType: 'hexagon' },
+        { question: '数一数有多少条边？', display: 'image', correct: 6, options: [4, 5, 6, 7], imageType: 'hexagon' },
+        { question: '这是什么形状？', display: 'image', correct: 4, options: ['三角形', '四边形', '五边形', '六边形'], imageType: 'pentagon' },
+        { question: '找出八边形', display: 'image', correct: 3, options: ['六边形', '七边形', '八边形', '五边形'], imageType: 'octagon' },
+        { question: '这是什么形状？', display: 'image', correct: 5, options: ['四边形', '五边形', '六边形', '七边形'], imageType: 'heptagon' },
+      ]
+    },
+  },
+
+  // 语文题目
+  chinese: {
+    // 汉字认知
+    char_1: {
+      name: '汉字 L1',
+      type: 'chinese_char',
+      difficulty: 1,
+      questions: [
+        { question: '哪个是"人"字？', display: 'text', correct: 0, options: ['人', '口', '日', '月'] },
+        { question: '哪个是"口"字？', display: 'text', correct: 1, options: ['人', '口', '日', '月'] },
+        { question: '哪个是"手"字？', display: 'text', correct: 0, options: ['手', '足', '目', '耳'] },
+        { question: '哪个是"日"字？', display: 'text', correct: 2, options: ['人', '口', '日', '月'] },
+        { question: '哪个是"月"字？', display: 'text', correct: 3, options: ['人', '口', '日', '月'] },
+      ]
+    },
+    char_2: {
+      name: '汉字 L2',
+      type: 'chinese_char',
+      difficulty: 2,
+      questions: [
+        { question: '哪个是"山"字？', display: 'text', correct: 0, options: ['山', '水', '火', '木'] },
+        { question: '哪个是"水"字？', display: 'text', correct: 1, options: ['山', '水', '火', '木'] },
+        { question: '哪个是"火"字？', display: 'text', correct: 2, options: ['山', '水', '火', '木'] },
+        { question: '哪个是"木"字？', display: 'text', correct: 3, options: ['山', '水', '火', '木'] },
+        { question: '哪个是"土"字？', display: 'text', correct: 0, options: ['土', '田', '石', '玉'] },
+      ]
+    },
+    char_3: {
+      name: '汉字 L3',
+      type: 'chinese_char',
+      difficulty: 3,
+      questions: [
+        { question: '哪个是"天"字？', display: 'text', correct: 0, options: ['天', '地', '人', '和'] },
+        { question: '哪个是"地"字？', display: 'text', correct: 1, options: ['天', '地', '人', '和'] },
+        { question: '哪个是"人"字？', display: 'text', correct: 2, options: ['天', '地', '人', '和'] },
+        { question: '哪个是"和"字？', display: 'text', correct: 3, options: ['天', '地', '人', '和'] },
+        { question: '哪个是"春"字？', display: 'text', correct: 0, options: ['春', '夏', '秋', '冬'] },
+      ]
+    },
+    // 拼音
+    pinyin_1: {
+      name: '拼音 L1',
+      type: 'pinyin',
+      difficulty: 1,
+      questions: [
+        { question: '哪个是"a"的读音？', display: 'text', correct: 0, options: ['a', 'o', 'e', 'i'] },
+        { question: '哪个是"o"的读音？', display: 'text', correct: 1, options: ['a', 'o', 'e', 'i'] },
+        { question: '哪个是"e"的读音？', display: 'text', correct: 2, options: ['a', 'o', 'e', 'i'] },
+        { question: '哪个是"i"的读音？', display: 'text', correct: 3, options: ['a', 'o', 'e', 'i'] },
+        { question: '哪个是"u"的读音？', display: 'text', correct: 0, options: ['u', 'ü', 'ai', 'ei'] },
+      ]
+    },
+    pinyin_2: {
+      name: '拼音 L2',
+      type: 'pinyin',
+      difficulty: 2,
+      questions: [
+        { question: '哪个是"b"的读音？', display: 'text', correct: 0, options: ['b', 'p', 'm', 'f'] },
+        { question: '哪个是"p"的读音？', display: 'text', correct: 1, options: ['b', 'p', 'm', 'f'] },
+        { question: '哪个是"m"的读音？', display: 'text', correct: 2, options: ['b', 'p', 'm', 'f'] },
+        { question: '哪个是"f"的读音？', display: 'text', correct: 3, options: ['b', 'p', 'm', 'f'] },
+        { question: '哪个是"d"的读音？', display: 'text', correct: 0, options: ['d', 't', 'n', 'l'] },
+      ]
+    },
+    pinyin_3: {
+      name: '拼音 L3',
+      type: 'pinyin',
+      difficulty: 3,
+      questions: [
+        { question: '"ma"怎么读？', display: 'text', correct: 0, options: ['妈', '马', '吗', '骂'] },
+        { question: '"ba"怎么读？', display: 'text', correct: 1, options: ['吧', '把', '爸', '罢'] },
+        { question: '"wu"怎么读？', display: 'text', correct: 2, options: ['屋', '无', '五', '物'] },
+        { question: '"yi"怎么读？', display: 'text', correct: 3, options: ['呀', '衣', '一', '易'] },
+        { question: '"yu"怎么读？', display: 'text', correct: 0, options: ['鱼', '雨', '玉', '欲'] },
+      ]
+    },
+    // 看图识词
+    vocab_noun: {
+      name: '看图 L1',
+      type: 'vocab',
+      difficulty: 1,
+      questions: [
+        { question: '这是什么？', display: 'image', correct: 0, options: ['苹果', '香蕉', '橘子', '葡萄'], imageType: 'apple' },
+        { question: '这是什么？', display: 'image', correct: 1, options: ['苹果', '香蕉', '橘子', '葡萄'], imageType: 'banana' },
+        { question: '这是什么？', display: 'image', correct: 2, options: ['苹果', '香蕉', '橘子', '葡萄'], imageType: 'orange' },
+        { question: '这是什么？', display: 'image', correct: 3, options: ['苹果', '香蕉', '橘子', '葡萄'], imageType: 'grape' },
+        { question: '这是什么？', display: 'image', correct: 0, options: ['汽车', '飞机', '火车', '轮船'], imageType: 'car' },
+      ]
+    },
+    vocab_verb: {
+      name: '看图 L2',
+      type: 'vocab',
+      difficulty: 2,
+      questions: [
+        { question: '小朋友在做什么？', display: 'image', correct: 0, options: ['跑步', '游泳', '跳舞', '唱歌'], imageType: 'run' },
+        { question: '小朋友在做什么？', display: 'image', correct: 1, options: ['跑步', '游泳', '跳舞', '唱歌'], imageType: 'swim' },
+        { question: '小朋友在做什么？', display: 'image', correct: 2, options: ['跑步', '游泳', '跳舞', '唱歌'], imageType: 'dance' },
+        { question: '小朋友在做什么？', display: 'image', correct: 3, options: ['跑步', '游泳', '跳舞', '唱歌'], imageType: 'sing' },
+        { question: '小朋友在做什么？', display: 'image', correct: 0, options: ['吃饭', '睡觉', '看书', '画画'], imageType: 'eat' },
+      ]
+    },
+    vocab_adj: {
+      name: '看图 L3',
+      type: 'vocab',
+      difficulty: 3,
+      questions: [
+        { question: '这个苹果是什么颜色？', display: 'image', correct: 0, options: ['红色', '绿色', '黄色', '蓝色'], imageType: 'red_apple' },
+        { question: '这朵花是什么颜色？', display: 'image', correct: 1, options: ['红色', '绿色', '黄色', '蓝色'], imageType: 'yellow_flower' },
+        { question: '天空是什么颜色？', display: 'image', correct: 2, options: ['红色', '绿色', '黄色', '蓝色'], imageType: 'blue_sky' },
+        { question: '草是什么颜色？', display: 'image', correct: 3, options: ['红色', '绿色', '黄色', '蓝色'], imageType: 'green_grass' },
+        { question: '太阳是什么颜色？', display: 'image', correct: 0, options: ['红色', '绿色', '黄色', '蓝色'], imageType: 'yellow_sun' },
+      ]
+    },
+    // 阅读理解
+    reading_1: {
+      name: '阅读 L1',
+      type: 'reading',
+      difficulty: 1,
+      questions: [
+        { question: '图片里有什么？', display: 'image', correct: 0, options: ['一个小女孩', '一个小男孩', '一只小狗', '一只小猫'], imageType: 'girl' },
+        { question: '图片里有什么？', display: 'image', correct: 1, options: ['一个小女孩', '一个小男孩', '一只小狗', '一只小猫'], imageType: 'boy' },
+        { question: '图片里有什么？', display: 'image', correct: 2, options: ['一个小女孩', '一个小男孩', '一只小狗', '一只小猫'], imageType: 'puppy' },
+        { question: '图片里有什么？', display: 'image', correct: 3, options: ['一个小女孩', '一个小男孩', '一只小狗', '一只小猫'], imageType: 'kitten' },
+        { question: '图片里有什么？', display: 'image', correct: 0, options: ['一棵树', '一朵花', '一片云', '一条鱼'], imageType: 'tree' },
+      ]
+    },
+    reading_2: {
+      name: '阅读 L2',
+      type: 'reading',
+      difficulty: 2,
+      questions: [
+        { question: '小朋友在哪里？', display: 'image', correct: 0, options: ['在家里', '在学校', '在公园', '在超市'], imageType: 'home' },
+        { question: '小朋友在哪里？', display: 'image', correct: 1, options: ['在家里', '在学校', '在公园', '在超市'], imageType: 'school' },
+        { question: '小朋友在哪里？', display: 'image', correct: 2, options: ['在家里', '在学校', '在公园', '在超市'], imageType: 'park' },
+        { question: '小朋友在哪里？', display: 'image', correct: 3, options: ['在家里', '在学校', '在公园', '在超市'], imageType: 'store' },
+        { question: '这是什么地方？', display: 'image', correct: 0, options: ['海滩', '森林', '沙漠', '山脉'], imageType: 'beach' },
+      ]
+    },
+    reading_3: {
+      name: '阅读 L3',
+      type: 'reading',
+      difficulty: 3,
+      questions: [
+        { question: '故事里发生了什么？', display: 'text', correct: 0, options: ['小朋友帮妈妈打扫', '小朋友在哭', '小朋友在玩耍', '小朋友在睡觉'] },
+        { question: '故事里发生了什么？', display: 'text', correct: 1, options: ['小朋友帮妈妈打扫', '小朋友在哭', '小朋友在玩耍', '小朋友在睡觉'] },
+        { question: '故事里发生了什么？', display: 'text', correct: 2, options: ['小朋友帮妈妈打扫', '小朋友在哭', '小朋友在玩耍', '小朋友在睡觉'] },
+        { question: '故事里发生了什么？', display: 'text', correct: 3, options: ['小朋友帮妈妈打扫', '小朋友在哭', '小朋友在玩耍', '小朋友在睡觉'] },
+        { question: '故事告诉我们什么道理？', display: 'text', correct: 0, options: ['要帮助父母', '要多睡觉', '要多玩耍', '要多哭闹'] },
+      ]
+    },
+  },
+
+  // 英语题目
+  english: {
+    // 字母认知
+    letter_1: {
+      name: '字母 L1',
+      type: 'english_letter',
+      difficulty: 1,
+      questions: [
+        { question: '这是哪个字母？', display: 'image', correct: 0, options: ['A', 'B', 'C', 'D'], imageType: 'letter_A' },
+        { question: '这是哪个字母？', display: 'image', correct: 1, options: ['A', 'B', 'C', 'D'], imageType: 'letter_B' },
+        { question: '这是哪个字母？', display: 'image', correct: 2, options: ['A', 'B', 'C', 'D'], imageType: 'letter_C' },
+        { question: '这是哪个字母？', display: 'image', correct: 3, options: ['A', 'B', 'C', 'D'], imageType: 'letter_D' },
+        { question: '这是哪个字母？', display: 'image', correct: 0, options: ['A', 'E', 'I', 'O'], imageType: 'letter_E' },
+      ]
+    },
+    letter_2: {
+      name: '字母 L2',
+      type: 'english_letter',
+      difficulty: 2,
+      questions: [
+        { question: '这是哪个字母？', display: 'image', correct: 0, options: ['F', 'G', 'H', 'I'], imageType: 'letter_F' },
+        { question: '这是哪个字母？', display: 'image', correct: 1, options: ['F', 'G', 'H', 'I'], imageType: 'letter_G' },
+        { question: '这是哪个字母？', display: 'image', correct: 2, options: ['F', 'G', 'H', 'I'], imageType: 'letter_H' },
+        { question: '这是哪个字母？', display: 'image', correct: 3, options: ['F', 'G', 'H', 'I'], imageType: 'letter_I' },
+        { question: '这是哪个字母？', display: 'image', correct: 0, options: ['A', 'E', 'J', 'O'], imageType: 'letter_J' },
+      ]
+    },
+    letter_3: {
+      name: '字母 L3',
+      type: 'english_letter',
+      difficulty: 3,
+      questions: [
+        { question: '这是哪个字母？', display: 'image', correct: 0, options: ['K', 'L', 'M', 'N'], imageType: 'letter_K' },
+        { question: '这是哪个字母？', display: 'image', correct: 1, options: ['K', 'L', 'M', 'N'], imageType: 'letter_L' },
+        { question: '这是哪个字母？', display: 'image', correct: 2, options: ['K', 'L', 'M', 'N'], imageType: 'letter_M' },
+        { question: '这是哪个字母？', display: 'image', correct: 3, options: ['K', 'L', 'M', 'N'], imageType: 'letter_N' },
+        { question: '这是哪个字母？', display: 'image', correct: 0, options: ['O', 'P', 'Q', 'R'], imageType: 'letter_O' },
+      ]
+    },
+    // 单词配对
+    word_1: {
+      name: '单词 L1',
+      type: 'english_word',
+      difficulty: 1,
+      questions: [
+        { question: '"Apple"是什么意思？', display: 'image', correct: 0, options: ['苹果', '香蕉', '橘子', '葡萄'], imageType: 'apple' },
+        { question: '"Banana"是什么意思？', display: 'image', correct: 1, options: ['苹果', '香蕉', '橘子', '葡萄'], imageType: 'banana' },
+        { question: '"Cat"是什么意思？', display: 'image', correct: 2, options: ['狗', '猫', '鸟', '鱼'], imageType: 'cat' },
+        { question: '"Dog"是什么意思？', display: 'image', correct: 3, options: ['狗', '猫', '鸟', '鱼'], imageType: 'dog' },
+        { question: '"Sun"是什么意思？', display: 'image', correct: 0, options: ['太阳', '月亮', '星星', '云'], imageType: 'sun' },
+      ]
+    },
+    word_2: {
+      name: '单词 L2',
+      type: 'english_word',
+      difficulty: 2,
+      questions: [
+        { question: '"Book"是什么意思？', display: 'image', correct: 0, options: ['书', '笔', '纸', '包'], imageType: 'book' },
+        { question: '"Pen"是什么意思？', display: 'image', correct: 1, options: ['书', '笔', '纸', '包'], imageType: 'pen' },
+        { question: '"Bag"是什么意思？', display: 'image', correct: 3, options: ['书', '笔', '纸', '包'], imageType: 'bag' },
+        { question: '"Car"是什么意思？', display: 'image', correct: 0, options: ['汽车', '飞机', '火车', '轮船'], imageType: 'car' },
+        { question: '"Fish"是什么意思？', display: 'image', correct: 2, options: ['狗', '猫', '鸟', '鱼'], imageType: 'fish' },
+      ]
+    },
+    word_3: {
+      name: '单词 L3',
+      type: 'english_word',
+      difficulty: 3,
+      questions: [
+        { question: '"Beautiful"是什么意思？', display: 'text', correct: 0, options: ['美丽的', '丑陋的', '高的', '矮的'] },
+        { question: '"Happy"是什么意思？', display: 'text', correct: 1, options: ['悲伤的', '快乐的', '生气的', '害怕的'] },
+        { question: '"Run"是什么意思？', display: 'text', correct: 2, options: ['走', '跑', '跳', '飞'] },
+        { question: '"Eat"是什么意思？', display: 'text', correct: 3, options: ['喝', '吃', '睡', '玩'] },
+        { question: '"Red"是什么意思？', display: 'text', correct: 0, options: ['红色', '蓝色', '绿色', '黄色'] },
+      ]
+    },
+    // 字母排序
+    alphabet_1: {
+      name: '排序 L1',
+      type: 'alphabet_order',
+      difficulty: 1,
+      questions: [
+        { question: '按顺序排列：A C B → ？', display: 'text', correct: 1, options: ['ABC', 'ACB', 'BAC', 'CBA'] },
+        { question: '按顺序排列：B A C → ？', display: 'text', correct: 0, options: ['ABC', 'ACB', 'BAC', 'CBA'] },
+        { question: '按顺序排列：C B A → ？', display: 'text', correct: 2, options: ['ABC', 'ACB', 'BAC', 'CBA'] },
+        { question: '按顺序排列：A B C → ？', display: 'text', correct: 0, options: ['ABC', 'ACB', 'BAC', 'CBA'] },
+        { question: '按顺序排列：B C A → ？', display: 'text', correct: 1, options: ['ABC', 'ACB', 'BAC', 'CBA'] },
+      ]
+    },
+    alphabet_2: {
+      name: '排序 L2',
+      type: 'alphabet_order',
+      difficulty: 2,
+      questions: [
+        { question: '按顺序排列：A E D B C → ？', display: 'text', correct: 0, options: ['ABCDE', 'ABDCE', 'ACBDE', 'ADEBC'] },
+        { question: '按顺序排列：B D A C E → ？', display: 'text', correct: 0, options: ['ABCDE', 'ABDCE', 'ACBDE', 'ADEBC'] },
+        { question: '按顺序排列：E A B D C → ？', display: 'text', correct: 0, options: ['ABCDE', 'ABDCE', 'ACBDE', 'ADEBC'] },
+        { question: '按顺序排列：D C B A E → ？', display: 'text', correct: 0, options: ['ABCDE', 'ABDCE', 'ACBDE', 'ADEBC'] },
+        { question: '按顺序排列：C A E B D → ？', display: 'text', correct: 0, options: ['ABCDE', 'ABDCE', 'ACBDE', 'ADEBC'] },
+      ]
+    },
+    alphabet_3: {
+      name: '排序 L3',
+      type: 'alphabet_order',
+      difficulty: 3,
+      questions: [
+        { question: '把 "CAT" 的字母排序：T C A → ？', display: 'text', correct: 0, options: ['ACT', 'ATC', 'CAT', 'CTA'] },
+        { question: '把 "DOG" 的字母排序：G D O → ？', display: 'text', correct: 2, options: ['ACT', 'ATC', 'DGO', 'DOG'] },
+        { question: '把 "SUN" 的字母排序：N U S → ？', display: 'text', correct: 1, options: ['NSU', 'NSU', 'SUN', 'USN'] },
+        { question: '把 "BIG" 的字母排序：I G B → ？', display: 'text', correct: 3, options: ['BIG', 'BGI', 'GBI', 'BGI'] },
+        { question: '把 "RUN" 的字母排序：U R N → ？', display: 'text', correct: 0, options: ['NRU', 'NUR', 'RUN', 'URN'] },
+      ]
+    },
+    // 听力选择
+    listen_1: {
+      name: '听力 L1',
+      type: 'listening',
+      difficulty: 1,
+      questions: [
+        { question: '听录音，选择正确的单词', audio: 'apple', correct: 0, options: ['Apple', 'Banana', 'Orange', 'Grape'] },
+        { question: '听录音，选择正确的单词', audio: 'cat', correct: 1, options: ['Dog', 'Cat', 'Bird', 'Fish'] },
+        { question: '听录音，选择正确的单词', audio: 'red', correct: 2, options: ['Blue', 'Green', 'Red', 'Yellow'] },
+        { question: '听录音，选择正确的单词', audio: 'one', correct: 3, options: ['Two', 'Three', 'Four', 'One'] },
+        { question: '听录音，选择正确的单词', audio: 'sun', correct: 0, options: ['Sun', 'Moon', 'Star', 'Cloud'] },
+      ]
+    },
+    listen_2: {
+      name: '听力 L2',
+      type: 'listening',
+      difficulty: 2,
+      questions: [
+        { question: '听录音，选择正确的单词', audio: 'book', correct: 0, options: ['Book', 'Pen', 'Bag', 'Cup'] },
+        { question: '听录音，选择正确的单词', audio: 'happy', correct: 1, options: ['Sad', 'Happy', 'Angry', 'Scared'] },
+        { question: '听录音，选择正确的单词', audio: 'run', correct: 2, options: ['Walk', 'Run', 'Jump', 'Fly'] },
+        { question: '听录音，选择正确的单词', audio: 'water', correct: 3, options: ['Fire', 'Earth', 'Air', 'Water'] },
+        { question: '听录音，选择正确的单词', audio: 'school', correct: 0, options: ['School', 'Home', 'Park', 'Store'] },
+      ]
+    },
+    listen_3: {
+      name: '听力 L3',
+      type: 'listening',
+      difficulty: 3,
+      questions: [
+        { question: '听句子，选择正确的中文翻译', audio: 'I love you', correct: 0, options: ['我爱你', '我喜欢你', '我很开心', '我很忙'] },
+        { question: '听句子，选择正确的中文翻译', audio: 'Good morning', correct: 1, options: ['晚安', '早上好', '下午好', '再见'] },
+        { question: '听句子，选择正确的中文翻译', audio: 'Thank you', correct: 2, options: ['对不起', '谢谢你', '不客气', '再见'] },
+        { question: '听句子，选择正确的中文翻译', audio: 'I am hungry', correct: 3, options: ['我不饿', '我很饱', '我很饿', '我在吃饭'] },
+        { question: '听句子，选择正确的中文翻译', audio: 'Where is the bathroom', correct: 0, options: ['厕所在哪里', '教室在哪里', '餐厅在哪里', '办公室在哪里'] },
+      ]
+    },
+  },
+
+  // 逻辑题目
+  logic: {
+    // 分类
+    classify_1: {
+      name: '分类 L1',
+      type: 'classification',
+      difficulty: 1,
+      questions: [
+        { question: '把苹果放到水果篮里', display: 'image', correct: 0, options: ['水果篮', '蔬菜篮'], imageType: 'apple' },
+        { question: '把胡萝卜放到哪里？', display: 'image', correct: 1, options: ['水果篮', '蔬菜篮'], imageType: 'carrot' },
+        { question: '把香蕉放到哪里？', display: 'image', correct: 0, options: ['水果篮', '蔬菜篮'], imageType: 'banana' },
+        { question: '把白菜放到哪里？', display: 'image', correct: 1, options: ['水果篮', '蔬菜篮'], imageType: 'cabbage' },
+        { question: '把葡萄放到哪里？', display: 'image', correct: 0, options: ['水果篮', '蔬菜篮'], imageType: 'grape' },
+      ]
+    },
+    classify_2: {
+      name: '分类 L2',
+      type: 'classification',
+      difficulty: 2,
+      questions: [
+        { question: '把狗归类到哪里？', display: 'image', correct: 0, options: ['动物', '植物', '交通工具'], imageType: 'dog' },
+        { question: '把树归类到哪里？', display: 'image', correct: 1, options: ['动物', '植物', '交通工具'], imageType: 'tree' },
+        { question: '把汽车归类到哪里？', display: 'image', correct: 2, options: ['动物', '植物', '交通工具'], imageType: 'car' },
+        { question: '把鸟归类到哪里？', display: 'image', correct: 0, options: ['动物', '植物', '交通工具'], imageType: 'bird' },
+        { question: '把花归类到哪里？', display: 'image', correct: 1, options: ['动物', '植物', '交通工具'], imageType: 'flower' },
+      ]
+    },
+    classify_3: {
+      name: '分类 L3',
+      type: 'classification',
+      difficulty: 3,
+      questions: [
+        { question: '按大小分类：西瓜是', display: 'image', correct: 0, options: ['大的', '小的', '中的'], imageType: 'watermelon' },
+        { question: '按颜色分类：红苹果是', display: 'image', correct: 0, options: ['红色的', '绿色的', '黄色的'], imageType: 'red_apple' },
+        { question: '按用途分类：椅子是用来', display: 'text', correct: 1, options: ['坐的', '放的', '吃的'], answer补充: '坐' },
+        { question: '按数量分类：三个苹果是', display: 'image', correct: 2, options: ['一个', '两个', '三个'], imageType: 'three_apples' },
+        { question: '按形状分类：球是', display: 'image', correct: 0, options: ['圆形的', '方形的', '三角形的'], imageType: 'ball' },
+      ]
+    },
+    // 排序
+    sequence_1: {
+      name: '排序 L1',
+      type: 'sequence',
+      difficulty: 1,
+      questions: [
+        { question: '从小到大排序：5, 2, 8', display: 'text', correct: 1, options: ['5,2,8', '2,5,8', '8,5,2', '2,8,5'] },
+        { question: '从小到大排序：1, 9, 3', display: 'text', correct: 2, options: ['9,3,1', '1,3,9', '1,9,3', '3,1,9'] },
+        { question: '从小到大排序：7, 4, 6', display: 'text', correct: 0, options: ['4,6,7', '6,4,7', '7,6,4', '4,7,6'] },
+        { question: '从大到小排序：3, 8, 5', display: 'text', correct: 0, options: ['8,5,3', '3,5,8', '5,3,8', '8,3,5'] },
+        { question: '从大到小排序：9, 1, 4', display: 'text', correct: 1, options: ['1,4,9', '9,4,1', '4,1,9', '9,1,4'] },
+      ]
+    },
+    sequence_2: {
+      name: '排序 L2',
+      type: 'sequence',
+      difficulty: 2,
+      questions: [
+        { question: '从小到大排序：12, 5, 18', display: 'text', correct: 1, options: ['18,12,5', '5,12,18', '12,5,18', '5,18,12'] },
+        { question: '从小到大排序：25, 10, 30', display: 'text', correct: 2, options: ['30,25,10', '10,25,30', '10,25,30', '25,10,30'] },
+        { question: '从小到大排序：7, 15, 3, 11', display: 'text', correct: 0, options: ['3,7,11,15', '15,11,7,3', '3,11,7,15', '7,3,11,15'] },
+        { question: '从大到小排序：20, 8, 14, 2', display: 'text', correct: 1, options: ['2,8,14,20', '20,14,8,2', '14,20,8,2', '8,2,20,14'] },
+        { question: '从小到大排序：50, 30, 40, 10', display: 'text', correct: 0, options: ['10,30,40,50', '50,40,30,10', '30,10,50,40', '40,50,10,30'] },
+      ]
+    },
+    sequence_3: {
+      name: '排序 L3',
+      type: 'sequence',
+      difficulty: 3,
+      questions: [
+        { question: '按身高从高到矮排序', display: 'text', correct: 0, options: ['爸爸>妈妈>宝宝', '宝宝>妈妈>爸爸', '妈妈>爸爸>宝宝', '爸爸>宝宝>妈妈'] },
+        { question: '按年龄从小到大排序', display: 'text', correct: 1, options: ['爷爷>爸爸>我', '我<爸爸<爷爷', '爸爸<我<爷爷', '爷爷<爸爸<我'] },
+        { question: '按轻重从轻到重排序', display: 'text', correct: 2, options: ['大象>汽车>自行车', '自行车<汽车<大象', '自行车<汽车<大象', '汽车<大象<自行车'] },
+        { question: '按速度从快到慢排序', display: 'text', correct: 0, options: ['飞机>火车>汽车', '汽车>火车>飞机', '火车>飞机>汽车', '飞机<火车<汽车'] },
+        { question: '按大小从大到小排序', display: 'text', correct: 1, options: ['地球<月亮<太阳', '太阳>地球>月亮', '月亮>地球>太阳', '地球>太阳>月亮'] },
+      ]
+    },
+    // 规律
+    pattern_1: {
+      name: '规律 L1',
+      type: 'pattern',
+      difficulty: 1,
+      questions: [
+        { question: '找规律：红 蓝 红 蓝 _', display: 'text', correct: 0, options: ['红', '蓝', '绿', '黄'] },
+        { question: '找规律：大 小 大 小 _', display: 'text', correct: 1, options: ['小', '大', '中', '无'] },
+        { question: '找规律：圆 方 圆 方 _', display: 'text', correct: 0, options: ['圆', '方', '三角', '椭圆'] },
+        { question: '找规律：1 2 1 2 _', display: 'text', correct: 1, options: ['2', '1', '3', '0'] },
+        { question: '找规律：高 矮 高 矮 _', display: 'text', correct: 0, options: ['高', '矮', '中', '无'] },
+      ]
+    },
+    pattern_2: {
+      name: '规律 L2',
+      type: 'pattern',
+      difficulty: 2,
+      questions: [
+        { question: '找规律：红 蓝 绿 红 蓝 绿 _', display: 'text', correct: 0, options: ['红', '蓝', '绿', '黄'] },
+        { question: '找规律：大 中 小 大 中 小 _', display: 'text', correct: 1, options: ['小', '大', '中', '无'] },
+        { question: '找规律：苹果 香蕉 橘子 苹果 香蕉 橘子 _', display: 'text', correct: 0, options: ['苹果', '香蕉', '橘子', '葡萄'] },
+        { question: '找规律：1 2 3 1 2 3 _', display: 'text', correct: 2, options: ['3', '2', '1', '4'] },
+        { question: '找规律：狗 猫 鸟 狗 猫 鸟 _', display: 'text', correct: 3, options: ['猫', '鸟', '狗', '狗'] },
+      ]
+    },
+    pattern_3: {
+      name: '规律 L3',
+      type: 'pattern',
+      difficulty: 3,
+      questions: [
+        { question: '找规律：1 1 2 3 5 8 _', display: 'text', correct: 0, options: ['13', '11', '10', '12'] },
+        { question: '找规律：2 4 6 8 _', display: 'text', correct: 1, options: ['9', '10', '11', '12'] },
+        { question: '找规律：1 4 9 16 _', display: 'text', correct: 2, options: ['20', '24', '25', '30'] },
+        { question: '找规律：1 3 6 10 _', display: 'text', correct: 3, options: ['13', '14', '15', '16'] },
+        { question: '找规律：1 2 4 8 _', display: 'text', correct: 0, options: ['16', '12', '14', '10'] },
+      ]
+    },
+    // 逻辑推理
+    reasoning_1: {
+      name: '推理 L1',
+      type: 'reasoning',
+      difficulty: 1,
+      questions: [
+        { question: '如果下雨了，地面会怎样？', display: 'text', correct: 0, options: ['湿的', '干的', '热的', '冷的'] },
+        { question: '如果天黑了，会看到什么？', display: 'text', correct: 1, options: ['太阳', '月亮和星星', '云', '彩虹'] },
+        { question: '鱼生活在哪里？', display: 'text', correct: 2, options: ['树上', '天上', '水里', '地下'] },
+        { question: '鸟有什么而鱼没有？', display: 'text', correct: 3, options: ['眼睛', '嘴巴', '尾巴', '翅膀'] },
+        { question: '什么动物会飞？', display: 'image', correct: 0, options: ['鸟', '狗', '鱼', '猫'], imageType: 'bird' },
+      ]
+    },
+    reasoning_2: {
+      name: '推理 L2',
+      type: 'reasoning',
+      difficulty: 2,
+      questions: [
+        { question: '苹果比梨大，梨比橘子大，什么最大？', display: 'text', correct: 0, options: ['苹果', '梨', '橘子', '一样大'] },
+        { question: '小明比小华高，小华比小丽高，谁最矮？', display: 'text', correct: 2, options: ['小明', '小华', '小丽', '一样高'] },
+        { question: '如果今天Monday，明天是？', display: 'text', correct: 1, options: ['Sunday', 'Tuesday', 'Wednesday', 'Thursday'] },
+        { question: '一年有几个月？', display: 'text', correct: 3, options: ['10', '11', '12', '13'] },
+        { question: '一周有几天？', display: 'text', correct: 0, options: ['7', '6', '5', '8'] },
+      ]
+    },
+    reasoning_3: {
+      name: '推理 L3',
+      type: 'reasoning',
+      difficulty: 3,
+      questions: [
+        { question: '所有狗都是动物，有些动物会飞，什么一定正确？', display: 'text', correct: 0, options: ['有些狗会飞', '所有狗都不会飞', '狗不一定是动物', '无法确定'] },
+        { question: 'A比B高，B比C高，D比A高，谁最高？', display: 'text', correct: 1, options: ['A', 'D', 'B', 'C'] },
+        { question: '如果有雨，足球赛取消。如果没有雨，足球赛进行。没有取消足球赛，说明什么？', display: 'text', correct: 2, options: ['下了雨', '没有下雨', '无法确定', '下了小雨'] },
+        { question: '红球比蓝球大，蓝球比绿球小，什么最大？', display: 'text', correct: 0, options: ['红球', '蓝球', '绿球', '一样大'] },
+        { question: '如果A=B，B=C，那么A和C的关系是？', display: 'text', correct: 1, options: ['A>C', 'A=C', 'A<C', '无法确定'] },
+      ]
+    },
+  },
+};
+
+// 获取所有学科
+QuestionData.getSubjects = function() {
+  return ['math', 'chinese', 'english', 'logic'];
+};
+
+// 获取学科名称
+QuestionData.getSubjectName = function(subject) {
+  const names = {
+    math: '数学',
+    chinese: '语文',
+    english: '英语',
+    logic: '逻辑',
+  };
+  return names[subject] || subject;
+};
+
+// 获取某学科所有关卡
+QuestionData.getLevels = function(subject) {
+  const subjectData = this[subject];
+  if (!subjectData) return [];
+  return Object.keys(subjectData).map(key => ({
+    key,
+    ...subjectData[key]
+  }));
+};
+
+// 获取某关卡的题目数量
+QuestionData.getQuestionCount = function(subject, level) {
+  const subjectData = this[subject];
+  if (!subjectData || !subjectData[level]) return 0;
+  return subjectData[level].questions.length;
+};
+
+// 获取题目数据
+QuestionData.getQuestion = function(subject, level, index) {
+  const subjectData = this[subject];
+  if (!subjectData || !subjectData[level]) return null;
+  const questions = subjectData[level].questions;
+  if (index < 0 || index >= questions.length) return null;
+  return questions[index];
 };
 
 // ============================================================
@@ -2970,6 +3697,1784 @@ class SettingsScene extends Scene {
     Storage.save();
   }
 }
+
+// ============================================================
+// 学习花园场景基类
+// ============================================================
+class LearningGardenScene extends Scene {
+  constructor(game, sceneType, npcType, bgColors, subject) {
+    super(game, sceneType);
+    this.npcType = npcType;
+    this.bgColors = bgColors;
+    this.subject = subject;
+    this.npcBounce = 0;
+    this.cloudOffsets = [0, 0, 0];
+  }
+
+  enter(data) {
+    this.isActive = true;
+    LearningProgress.init();
+  }
+
+  _renderBackground(ctx) {
+    const colors = this.bgColors;
+    
+    // 渐变背景
+    const gradient = ctx.createLinearGradient(0, 0, 0, CONFIG.CANVAS_HEIGHT);
+    gradient.addColorStop(0, colors.sky1);
+    gradient.addColorStop(0.4, colors.sky2);
+    gradient.addColorStop(0.4, colors.ground1);
+    gradient.addColorStop(1, colors.ground2);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+
+    // 云朵
+    ctx.fillStyle = colors.cloud;
+    this._drawCloud(ctx, 100 + this.cloudOffsets[0] % 400, 100, 0.6);
+    this._drawCloud(ctx, 350 + this.cloudOffsets[1] % 400, 150, 0.5);
+    this._drawCloud(ctx, 550 + this.cloudOffsets[2] % 400, 80, 0.7);
+
+    // 装饰元素
+    this._drawDecorations(ctx);
+  }
+
+  _drawCloud(ctx, x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.beginPath();
+    ctx.arc(0, 0, 25, 0, Math.PI * 2);
+    ctx.arc(20, -8, 20, 0, Math.PI * 2);
+    ctx.arc(40, 0, 25, 0, Math.PI * 2);
+    ctx.arc(20, 8, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  _drawDecorations(ctx) {
+    // 子类实现
+  }
+
+  update(dt) {
+    super.update(dt);
+    
+    // NPC弹跳动画
+    this.npcBounce += dt * 0.005;
+    
+    // 云朵飘动
+    this.cloudOffsets[0] += dt * 0.01;
+    this.cloudOffsets[1] += dt * 0.008;
+    this.cloudOffsets[2] += dt * 0.012;
+  }
+
+  _drawNPC(ctx, x, y, size) {
+    ctx.save();
+    ctx.translate(x, y + Math.sin(this.npcBounce) * 5);
+
+    switch(this.npcType) {
+      case 'fox':
+        this._drawFox(ctx, size);
+        break;
+      case 'cat':
+        this._drawCat(ctx, size);
+        break;
+      case 'bird':
+        this._drawBird(ctx, size);
+        break;
+      case 'deer':
+        this._drawDeer(ctx, size);
+        break;
+    }
+
+    ctx.restore();
+  }
+
+  _drawFox(ctx, size) {
+    // 身体
+    ctx.fillStyle = '#FF8C00';
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.2, size * 0.4, size * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 头
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.3, size * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 耳朵
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.3, -size * 0.5);
+    ctx.lineTo(-size * 0.15, -size * 0.8);
+    ctx.lineTo(-size * 0.05, -size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.3, -size * 0.5);
+    ctx.lineTo(size * 0.15, -size * 0.8);
+    ctx.lineTo(size * 0.05, -size * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    // 脸部
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.ellipse(0, -size * 0.15, size * 0.15, size * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 眼睛
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(-size * 0.12, -size * 0.35, size * 0.06, 0, Math.PI * 2);
+    ctx.arc(size * 0.12, -size * 0.35, size * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 鼻子
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.18, size * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 尾巴
+    ctx.fillStyle = '#FF8C00';
+    ctx.beginPath();
+    ctx.moveTo(size * 0.35, size * 0.2);
+    ctx.quadraticCurveTo(size * 0.7, 0, size * 0.5, -size * 0.3);
+    ctx.quadraticCurveTo(size * 0.6, -size * 0.1, size * 0.35, size * 0.1);
+    ctx.fill();
+
+    // 尾巴尖
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(size * 0.5, -size * 0.3, size * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  _drawCat(ctx, size) {
+    // 身体
+    ctx.fillStyle = '#A0522D';
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.2, size * 0.35, size * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 头
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.3, size * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 耳朵
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.3, -size * 0.45);
+    ctx.lineTo(-size * 0.15, -size * 0.75);
+    ctx.lineTo(-size * 0.02, -size * 0.45);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.3, -size * 0.45);
+    ctx.lineTo(size * 0.15, -size * 0.75);
+    ctx.lineTo(size * 0.02, -size * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    // 内耳
+    ctx.fillStyle = '#FFB6C1';
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.25, -size * 0.48);
+    ctx.lineTo(-size * 0.15, -size * 0.65);
+    ctx.lineTo(-size * 0.08, -size * 0.48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.25, -size * 0.48);
+    ctx.lineTo(size * 0.15, -size * 0.65);
+    ctx.lineTo(size * 0.08, -size * 0.48);
+    ctx.closePath();
+    ctx.fill();
+
+    // 眼睛
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.12, -size * 0.32, size * 0.06, size * 0.1, 0, 0, Math.PI * 2);
+    ctx.ellipse(size * 0.12, -size * 0.32, size * 0.06, size * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 鼻子
+    ctx.fillStyle = '#FFB6C1';
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.22);
+    ctx.lineTo(-size * 0.05, -size * 0.17);
+    ctx.lineTo(size * 0.05, -size * 0.17);
+    ctx.closePath();
+    ctx.fill();
+
+    // 尾巴
+    ctx.strokeStyle = '#A0522D';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(size * 0.3, size * 0.15);
+    ctx.quadraticCurveTo(size * 0.6, 0, size * 0.5, -size * 0.4);
+    ctx.stroke();
+  }
+
+  _drawBird(ctx, size) {
+    // 身体
+    ctx.fillStyle = '#87CEEB';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, size * 0.3, size * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 头
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.35, size * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 嘴巴
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.moveTo(0, -size * 0.35);
+    ctx.lineTo(-size * 0.1, -size * 0.25);
+    ctx.lineTo(0, -size * 0.15);
+    ctx.lineTo(size * 0.1, -size * 0.25);
+    ctx.closePath();
+    ctx.fill();
+
+    // 眼睛
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(-size * 0.08, -size * 0.38, size * 0.05, 0, Math.PI * 2);
+    ctx.arc(size * 0.08, -size * 0.38, size * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 翅膀
+    ctx.fillStyle = '#4682B4';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.35, 0, size * 0.15, size * 0.25, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(size * 0.35, 0, size * 0.15, size * 0.25, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 腿
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.1, size * 0.2);
+    ctx.lineTo(-size * 0.1, size * 0.4);
+    ctx.moveTo(size * 0.1, size * 0.2);
+    ctx.lineTo(size * 0.1, size * 0.4);
+    ctx.stroke();
+  }
+
+  _drawDeer(ctx, size) {
+    // 身体
+    ctx.fillStyle = '#D2691E';
+    ctx.beginPath();
+    ctx.ellipse(0, size * 0.15, size * 0.4, size * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 头
+    ctx.beginPath();
+    ctx.arc(0, -size * 0.35, size * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 鹿角
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.15, -size * 0.55);
+    ctx.lineTo(-size * 0.25, -size * 0.85);
+    ctx.lineTo(-size * 0.35, -size * 0.75);
+    ctx.moveTo(-size * 0.25, -size * 0.85);
+    ctx.lineTo(-size * 0.2, -size * 0.95);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(size * 0.15, -size * 0.55);
+    ctx.lineTo(size * 0.25, -size * 0.85);
+    ctx.lineTo(size * 0.35, -size * 0.75);
+    ctx.moveTo(size * 0.25, -size * 0.85);
+    ctx.lineTo(size * 0.2, -size * 0.95);
+    ctx.stroke();
+
+    // 耳朵
+    ctx.fillStyle = '#D2691E';
+    ctx.beginPath();
+    ctx.ellipse(-size * 0.35, -size * 0.35, size * 0.12, size * 0.08, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(size * 0.35, -size * 0.35, size * 0.12, size * 0.08, 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 眼睛
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(-size * 0.1, -size * 0.38, size * 0.05, 0, Math.PI * 2);
+    ctx.arc(size * 0.1, -size * 0.38, size * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 鼻子
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.ellipse(0, -size * 0.28, size * 0.06, size * 0.04, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 斑点
+    ctx.fillStyle = '#F5DEB3';
+    const spots = [[-0.2, -0.2], [0.15, -0.15], [-0.1, 0], [0.2, 0.1], [-0.25, 0.15]];
+    for (const [sx, sy] of spots) {
+      ctx.beginPath();
+      ctx.arc(size * sx, size * sy, size * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// 数学花园场景
+class MathGardenScene extends LearningGardenScene {
+  constructor(game) {
+    super(
+      game,
+      SceneType.MATH_GARDEN,
+      'fox',
+      {
+        sky1: '#1a237e',
+        sky2: '#3949ab',
+        ground1: '#c8e6c9',
+        ground2: '#81c784',
+        cloud: 'rgba(255,255,255,0.8)',
+      },
+      'math'
+    );
+  }
+
+  _drawDecorations(ctx) {
+    // 数学符号装饰
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = '40px Arial';
+    ctx.fillText('＋', 50, 300);
+    ctx.fillText('－', 650, 400);
+    ctx.fillText('×', 100, 500);
+    ctx.fillText('÷', 600, 200);
+    ctx.font = '30px Arial';
+    ctx.fillText('＝', 300, 150);
+    ctx.fillText('123', 500, 550);
+
+    // 花朵装饰
+    ctx.fillStyle = '#E91E63';
+    this._drawFlower(ctx, 80, 350, 15);
+    this._drawFlower(ctx, 640, 300, 12);
+    ctx.fillStyle = '#9C27B0';
+    this._drawFlower(ctx, 150, 500, 10);
+  }
+
+  _drawFlower(ctx, x, y, size) {
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(
+        x + Math.cos(angle) * size,
+        y + Math.sin(angle) * size,
+        size / 2,
+        size / 3,
+        angle,
+        0,
+        Math.PI * 2
+      );
+      ctx.fill();
+    }
+    ctx.fillStyle = '#FFEB3B';
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  _createUI() {
+    // 返回按钮
+    const backBtn = new Button(20, 20, 80, 40, '返回');
+    backBtn.onClick = () => this.game.changeScene(SceneType.GARDEN);
+    this.uiElements.push(backBtn);
+
+    // 标题
+    const title = new Text(CONFIG.CANVAS_WIDTH / 2, 30, '数学花园', {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+      align: 'center',
+    });
+    this.uiElements.push(title);
+
+    // 星星总数
+    const totalStars = LearningProgress.getTotalStars();
+    const starsText = new Text(CONFIG.CANVAS_WIDTH / 2, 70, `总星星: ${totalStars} ⭐`, {
+      fontSize: 18,
+      color: '#FFEB3B',
+      align: 'center',
+    });
+    this.uiElements.push(starsText);
+
+    // 关卡按钮
+    const levels = QuestionData.getLevels('math');
+    const startY = 200;
+    const btnWidth = 200;
+    const btnHeight = 60;
+    const spacing = 15;
+
+    levels.forEach((level, index) => {
+      const row = Math.floor(index / 2);
+      const col = index % 2;
+      const x = col === 0 ? 80 : 420;
+      const y = startY + row * (btnHeight + spacing);
+
+      const levelNum = index + 1;
+      const stars = LearningProgress.getLevelStars('math', levelNum);
+      const unlocked = LearningProgress.isLevelUnlocked('math', levelNum);
+
+      const levelBtn = new Button(x, y, btnWidth, btnHeight, '');
+      levelBtn.backgroundColor = unlocked ? '#4CAF50' : '#9E9E9E';
+      levelBtn.disabled = !unlocked;
+
+      // 存储关卡信息用于点击处理
+      levelBtn.levelData = { subject: 'math', level: levelNum, levelKey: level.key };
+      levelBtn.onClick = () => {
+        this.game.changeScene(SceneType.LEARNING, levelBtn.levelData);
+      };
+
+      // 添加关卡标签
+      levelBtn.render = function(ctx) {
+        if (!this.visible) return;
+        ctx.save();
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+
+        let color = this.backgroundColor;
+        if (this.disabled) {
+          color = this.disabledColor;
+        } else if (this.isPressed) {
+          color = this.pressedColor;
+        } else if (this.isHovered) {
+          color = this.hoverColor;
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, 10);
+        ctx.fill();
+
+        // 关卡名称
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(level.name, 0, -10);
+
+        // 星星显示
+        ctx.font = '20px Arial';
+        ctx.fillText('★'.repeat(stars) + '☆'.repeat(3 - stars), 0, 15);
+
+        // 锁定图标
+        if (!unlocked) {
+          ctx.font = '24px Arial';
+          ctx.fillText('🔒', 0, 0);
+        }
+
+        ctx.restore();
+      };
+
+      this.uiElements.push(levelBtn);
+    });
+  }
+
+  render(ctx) {
+    this._renderBackground(ctx);
+    this._drawNPC(ctx, 580, 350, 80);
+
+    for (const ui of this.uiElements) {
+      ui.render(ctx);
+    }
+  }
+}
+
+// 语文花园场景
+class ChineseGardenScene extends LearningGardenScene {
+  constructor(game) {
+    super(
+      game,
+      SceneType.CHINESE_GARDEN,
+      'cat',
+      {
+        sky1: '#006064',
+        sky2: '#00838f',
+        ground1: '#fff9c4',
+        ground2: '#fff176',
+        cloud: 'rgba(255,255,255,0.9)',
+      },
+      'chinese'
+    );
+  }
+
+  _drawDecorations(ctx) {
+    // 中文字符装饰
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.font = '50px Arial';
+    ctx.fillText('汉', 60, 280);
+    ctx.fillText('字', 620, 180);
+    ctx.font = '35px Arial';
+    ctx.fillText('拼', 150, 480);
+    ctx.fillText('音', 550, 520);
+    ctx.font = '28px Arial';
+    ctx.fillText('阅', 80, 120);
+    ctx.fillText('读', 640, 400);
+
+    // 竹子装饰
+    ctx.fillStyle = '#2E7D32';
+    ctx.fillRect(50, 350, 15, 150);
+    ctx.fillRect(45, 400, 25, 8);
+    ctx.fillRect(45, 450, 25, 8);
+
+    ctx.fillRect(630, 280, 15, 180);
+    ctx.fillRect(625, 330, 25, 8);
+    ctx.fillRect(625, 380, 25, 8);
+    ctx.fillRect(625, 430, 25, 8);
+  }
+
+  _createUI() {
+    const backBtn = new Button(20, 20, 80, 40, '返回');
+    backBtn.onClick = () => this.game.changeScene(SceneType.GARDEN);
+    this.uiElements.push(backBtn);
+
+    const title = new Text(CONFIG.CANVAS_WIDTH / 2, 30, '语文花园', {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+      align: 'center',
+    });
+    this.uiElements.push(title);
+
+    const totalStars = LearningProgress.getTotalStars();
+    const starsText = new Text(CONFIG.CANVAS_WIDTH / 2, 70, `总星星: ${totalStars} ⭐`, {
+      fontSize: 18,
+      color: '#FFEB3B',
+      align: 'center',
+    });
+    this.uiElements.push(starsText);
+
+    const levels = QuestionData.getLevels('chinese');
+    const startY = 200;
+    const btnWidth = 200;
+    const btnHeight = 60;
+    const spacing = 15;
+
+    levels.forEach((level, index) => {
+      const row = Math.floor(index / 2);
+      const col = index % 2;
+      const x = col === 0 ? 80 : 420;
+      const y = startY + row * (btnHeight + spacing);
+
+      const levelNum = index + 1;
+      const stars = LearningProgress.getLevelStars('chinese', levelNum);
+      const unlocked = LearningProgress.isLevelUnlocked('chinese', levelNum);
+
+      const levelBtn = new Button(x, y, btnWidth, btnHeight, '');
+      levelBtn.backgroundColor = unlocked ? '#4CAF50' : '#9E9E9E';
+      levelBtn.disabled = !unlocked;
+      levelBtn.levelData = { subject: 'chinese', level: levelNum, levelKey: level.key };
+      levelBtn.onClick = () => {
+        this.game.changeScene(SceneType.LEARNING, levelBtn.levelData);
+      };
+
+      levelBtn.render = function(ctx) {
+        if (!this.visible) return;
+        ctx.save();
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+
+        let color = this.backgroundColor;
+        if (this.disabled) {
+          color = this.disabledColor;
+        } else if (this.isPressed) {
+          color = this.pressedColor;
+        } else if (this.isHovered) {
+          color = this.hoverColor;
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, 10);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(level.name, 0, -10);
+
+        ctx.font = '20px Arial';
+        ctx.fillText('★'.repeat(stars) + '☆'.repeat(3 - stars), 0, 15);
+
+        if (!unlocked) {
+          ctx.font = '24px Arial';
+          ctx.fillText('🔒', 0, 0);
+        }
+
+        ctx.restore();
+      };
+
+      this.uiElements.push(levelBtn);
+    });
+  }
+
+  render(ctx) {
+    this._renderBackground(ctx);
+    this._drawNPC(ctx, 580, 350, 80);
+
+    for (const ui of this.uiElements) {
+      ui.render(ctx);
+    }
+  }
+}
+
+// 英语花园场景
+class EnglishGardenScene extends LearningGardenScene {
+  constructor(game) {
+    super(
+      game,
+      SceneType.ENGLISH_GARDEN,
+      'bird',
+      {
+        sky1: '#1b5e20',
+        sky2: '#388e3c',
+        ground1: '#e8f5e9',
+        ground2: '#a5d6a7',
+        cloud: 'rgba(255,255,255,0.85)',
+      },
+      'english'
+    );
+  }
+
+  _drawDecorations(ctx) {
+    // 英文字母装饰
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = 'bold 45px Arial';
+    ctx.fillText('A', 70, 200);
+    ctx.fillText('B', 620, 280);
+    ctx.fillText('C', 100, 450);
+    ctx.font = 'bold 35px Arial';
+    ctx.fillText('ABC', 500, 150);
+    ctx.fillText('XYZ', 300, 550);
+
+    // 彩虹装饰
+    const rainbowColors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
+    for (let i = 0; i < rainbowColors.length; i++) {
+      ctx.strokeStyle = rainbowColors[i];
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(360, 120, 60 + i * 6, Math.PI, 0);
+      ctx.stroke();
+    }
+
+    // 小星星
+    ctx.fillStyle = '#FFEB3B';
+    const starPositions = [[80, 350], [650, 450], [200, 150], [550, 300]];
+    for (const [sx, sy] of starPositions) {
+      this._drawStar(ctx, sx, sy, 10);
+    }
+  }
+
+  _drawStar(ctx, x, y, size) {
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+      const px = x + Math.cos(angle) * size;
+      const py = y + Math.sin(angle) * size;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  _createUI() {
+    const backBtn = new Button(20, 20, 80, 40, '返回');
+    backBtn.onClick = () => this.game.changeScene(SceneType.GARDEN);
+    this.uiElements.push(backBtn);
+
+    const title = new Text(CONFIG.CANVAS_WIDTH / 2, 30, '英语花园', {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+      align: 'center',
+    });
+    this.uiElements.push(title);
+
+    const totalStars = LearningProgress.getTotalStars();
+    const starsText = new Text(CONFIG.CANVAS_WIDTH / 2, 70, `总星星: ${totalStars} ⭐`, {
+      fontSize: 18,
+      color: '#FFEB3B',
+      align: 'center',
+    });
+    this.uiElements.push(starsText);
+
+    const levels = QuestionData.getLevels('english');
+    const startY = 200;
+    const btnWidth = 200;
+    const btnHeight = 60;
+    const spacing = 15;
+
+    levels.forEach((level, index) => {
+      const row = Math.floor(index / 2);
+      const col = index % 2;
+      const x = col === 0 ? 80 : 420;
+      const y = startY + row * (btnHeight + spacing);
+
+      const levelNum = index + 1;
+      const stars = LearningProgress.getLevelStars('english', levelNum);
+      const unlocked = LearningProgress.isLevelUnlocked('english', levelNum);
+
+      const levelBtn = new Button(x, y, btnWidth, btnHeight, '');
+      levelBtn.backgroundColor = unlocked ? '#4CAF50' : '#9E9E9E';
+      levelBtn.disabled = !unlocked;
+      levelBtn.levelData = { subject: 'english', level: levelNum, levelKey: level.key };
+      levelBtn.onClick = () => {
+        this.game.changeScene(SceneType.LEARNING, levelBtn.levelData);
+      };
+
+      levelBtn.render = function(ctx) {
+        if (!this.visible) return;
+        ctx.save();
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+
+        let color = this.backgroundColor;
+        if (this.disabled) {
+          color = this.disabledColor;
+        } else if (this.isPressed) {
+          color = this.pressedColor;
+        } else if (this.isHovered) {
+          color = this.hoverColor;
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, 10);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(level.name, 0, -10);
+
+        ctx.font = '20px Arial';
+        ctx.fillText('★'.repeat(stars) + '☆'.repeat(3 - stars), 0, 15);
+
+        if (!unlocked) {
+          ctx.font = '24px Arial';
+          ctx.fillText('🔒', 0, 0);
+        }
+
+        ctx.restore();
+      };
+
+      this.uiElements.push(levelBtn);
+    });
+  }
+
+  render(ctx) {
+    this._renderBackground(ctx);
+    this._drawNPC(ctx, 580, 350, 80);
+
+    for (const ui of this.uiElements) {
+      ui.render(ctx);
+    }
+  }
+}
+
+// 逻辑花园场景
+class LogicGardenScene extends LearningGardenScene {
+  constructor(game) {
+    super(
+      game,
+      SceneType.LOGIC_GARDEN,
+      'deer',
+      {
+        sky1: '#4a148c',
+        sky2: '#7b1fa2',
+        ground1: '#e1bee7',
+        ground2: '#ce93d8',
+        cloud: 'rgba(255,255,255,0.75)',
+      },
+      'logic'
+    );
+  }
+
+  _drawDecorations(ctx) {
+    // 逻辑符号装饰
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = 'bold 40px Arial';
+    ctx.fillText('?', 80, 250);
+    ctx.fillText('!', 650, 350);
+    ctx.font = '30px Arial';
+    ctx.fillText('①②③', 500, 150);
+    ctx.fillText('★★★', 150, 480);
+
+    // 问号气泡
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(600, 180, 35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = 'bold 40px Arial';
+    ctx.fillText('?', 585, 195);
+
+    // 箭头装饰
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(100, 350);
+    ctx.lineTo(150, 350);
+    ctx.lineTo(140, 340);
+    ctx.moveTo(150, 350);
+    ctx.lineTo(140, 360);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(550, 500);
+    ctx.lineTo(620, 500);
+    ctx.lineTo(610, 490);
+    ctx.moveTo(620, 500);
+    ctx.lineTo(610, 510);
+    ctx.stroke();
+  }
+
+  _createUI() {
+    const backBtn = new Button(20, 20, 80, 40, '返回');
+    backBtn.onClick = () => this.game.changeScene(SceneType.GARDEN);
+    this.uiElements.push(backBtn);
+
+    const title = new Text(CONFIG.CANVAS_WIDTH / 2, 30, '逻辑花园', {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+      align: 'center',
+    });
+    this.uiElements.push(title);
+
+    const totalStars = LearningProgress.getTotalStars();
+    const starsText = new Text(CONFIG.CANVAS_WIDTH / 2, 70, `总星星: ${totalStars} ⭐`, {
+      fontSize: 18,
+      color: '#FFEB3B',
+      align: 'center',
+    });
+    this.uiElements.push(starsText);
+
+    const levels = QuestionData.getLevels('logic');
+    const startY = 200;
+    const btnWidth = 200;
+    const btnHeight = 60;
+    const spacing = 15;
+
+    levels.forEach((level, index) => {
+      const row = Math.floor(index / 2);
+      const col = index % 2;
+      const x = col === 0 ? 80 : 420;
+      const y = startY + row * (btnHeight + spacing);
+
+      const levelNum = index + 1;
+      const stars = LearningProgress.getLevelStars('logic', levelNum);
+      const unlocked = LearningProgress.isLevelUnlocked('logic', levelNum);
+
+      const levelBtn = new Button(x, y, btnWidth, btnHeight, '');
+      levelBtn.backgroundColor = unlocked ? '#4CAF50' : '#9E9E9E';
+      levelBtn.disabled = !unlocked;
+      levelBtn.levelData = { subject: 'logic', level: levelNum, levelKey: level.key };
+      levelBtn.onClick = () => {
+        this.game.changeScene(SceneType.LEARNING, levelBtn.levelData);
+      };
+
+      levelBtn.render = function(ctx) {
+        if (!this.visible) return;
+        ctx.save();
+        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+
+        let color = this.backgroundColor;
+        if (this.disabled) {
+          color = this.disabledColor;
+        } else if (this.isPressed) {
+          color = this.pressedColor;
+        } else if (this.isHovered) {
+          color = this.hoverColor;
+        }
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, 10);
+        ctx.fill();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 18px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(level.name, 0, -10);
+
+        ctx.font = '20px Arial';
+        ctx.fillText('★'.repeat(stars) + '☆'.repeat(3 - stars), 0, 15);
+
+        if (!unlocked) {
+          ctx.font = '24px Arial';
+          ctx.fillText('🔒', 0, 0);
+        }
+
+        ctx.restore();
+      };
+
+      this.uiElements.push(levelBtn);
+    });
+  }
+
+  render(ctx) {
+    this._renderBackground(ctx);
+    this._drawNPC(ctx, 580, 350, 80);
+
+    for (const ui of this.uiElements) {
+      ui.render(ctx);
+    }
+  }
+}
+
+// ============================================================
+// 学习场景 - 关卡进行
+// ============================================================
+class LearningScene extends Scene {
+  constructor(game) {
+    super(game, SceneType.LEARNING);
+    this.subject = null;
+    this.level = null;
+    this.levelKey = null;
+    this.currentQuestionIndex = 0;
+    this.lives = 3;
+    this.wrongAnswers = 0;
+    this.isShowingFeedback = false;
+    this.feedbackTimer = 0;
+    this.isLevelComplete = false;
+    this.showRewardPanel = false;
+    this.selectedReward = null;
+    this.shakeOffset = 0;
+    this.correctAnimProgress = 0;
+    this.questionDisplayTime = 0;
+  }
+
+  enter(data) {
+    this.isActive = true;
+    this.subject = data.subject;
+    this.level = data.level;
+    this.levelKey = data.levelKey;
+    this.currentQuestionIndex = 0;
+    this.lives = 3;
+    this.wrongAnswers = 0;
+    this.isShowingFeedback = false;
+    this.feedbackTimer = 0;
+    this.isLevelComplete = false;
+    this.showRewardPanel = false;
+    this.selectedReward = null;
+    this.questionDisplayTime = 0;
+    this._createUI();
+  }
+
+  _createUI() {
+    this.uiElements = [];
+
+    // 返回按钮
+    const backBtn = new Button(20, 20, 80, 40, '返回');
+    backBtn.onClick = () => this.game.changeScene(this._getGardenScene());
+    this.uiElements.push(backBtn);
+
+    // 标题
+    const levelName = QuestionData.getLevels(this.subject).find(l => l.key === this.levelKey)?.name || '关卡';
+    const title = new Text(CONFIG.CANVAS_WIDTH / 2, 30, levelName, {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#333333',
+      align: 'center',
+    });
+    this.uiElements.push(title);
+
+    // 进度指示器
+    this.progressIndicator = new Text(CONFIG.CANVAS_WIDTH / 2, 65, '第 1/5 题', {
+      fontSize: 16,
+      color: '#666666',
+      align: 'center',
+    });
+    this.uiElements.push(this.progressIndicator);
+
+    // 生命值显示
+    this.livesDisplay = new Text(CONFIG.CANVAS_WIDTH - 100, 30, '生命: ❤️❤️❤️', {
+      fontSize: 16,
+      color: '#F44336',
+      align: 'left',
+    });
+    this.uiElements.push(this.livesDisplay);
+
+    // 问题显示区域
+    this.questionDisplay = {
+      x: CONFIG.CANVAS_WIDTH / 2,
+      y: 250,
+      question: null,
+      render: function(ctx) {
+        if (!this.question) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // 问题背景
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 5;
+        ctx.beginPath();
+        ctx.roundRect(-280, -80, 560, 160, 15);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+
+        // 问题文字
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.question.question, 0, -20);
+
+        // 显示图片
+        if (this.question.display === 'image' && this.question.imageType) {
+          this._drawImage(ctx, this.question.imageType, this.question.imageCount);
+        }
+
+        ctx.restore();
+      },
+      _drawImage: function(ctx, imageType, count) {
+        count = count || 1;
+        const startX = -((count - 1) * 40) / 2;
+        for (let i = 0; i < count; i++) {
+          LearningScene._drawQuestionImage(ctx, startX + i * 40, 40, imageType);
+        }
+      }
+    };
+    this.uiElements.push(this.questionDisplay);
+
+    // 创建答案按钮
+    this.answerButtons = [];
+    this._createAnswerButtons();
+
+    // 反馈动画
+    this.feedbackDisplay = {
+      x: CONFIG.CANVAS_WIDTH / 2,
+      y: 500,
+      isCorrect: true,
+      alpha: 0,
+      scale: 0,
+      render: function(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.globalAlpha = this.alpha;
+        ctx.scale(this.scale, this.scale);
+
+        // 圆形背景
+        ctx.fillStyle = this.isCorrect ? '#4CAF50' : '#F44336';
+        ctx.beginPath();
+        ctx.arc(0, 0, 50, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 符号
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 50px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.isCorrect ? '✓' : '✗', 0, 0);
+
+        ctx.restore();
+      }
+    };
+    this.uiElements.push(this.feedbackDisplay);
+
+    // 加载第一题
+    this._loadQuestion(0);
+  }
+
+  _createAnswerButtons() {
+    const question = QuestionData.getQuestion(this.subject, this.levelKey, this.currentQuestionIndex);
+    if (!question) return;
+
+    const options = question.options;
+    const btnWidth = 300;
+    const btnHeight = 60;
+    const spacing = 15;
+    const startY = 520;
+
+    // 根据选项数量调整布局
+    const cols = options.length <= 2 ? 1 : 2;
+    const rows = Math.ceil(options.length / cols);
+
+    options.forEach((option, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const x = cols === 1 ? CONFIG.CANVAS_WIDTH / 2 - btnWidth / 2 : (col === 0 ? 60 : 360);
+      const y = startY + row * (btnHeight + spacing);
+
+      const btn = new Button(x, y, btnWidth, btnHeight, String(option));
+      btn.optionIndex = index;
+      btn.backgroundColor = '#2196F3';
+      btn.onClick = () => this._onAnswerSelected(index);
+
+      this.answerButtons.push(btn);
+      this.uiElements.push(btn);
+    });
+  }
+
+  _clearAnswerButtons() {
+    for (const btn of this.answerButtons) {
+      const idx = this.uiElements.indexOf(btn);
+      if (idx !== -1) this.uiElements.splice(idx, 1);
+    }
+    this.answerButtons = [];
+  }
+
+  _loadQuestion(index) {
+    const question = QuestionData.getQuestion(this.subject, this.levelKey, index);
+    if (!question) {
+      this._onLevelComplete();
+      return;
+    }
+
+    this.currentQuestionIndex = index;
+    this.questionDisplay.question = question;
+    this.progressIndicator.setText(`第 ${index + 1}/5 题`);
+    this.questionDisplayTime = 0;
+
+    // 清除旧按钮并创建新按钮
+    this._clearAnswerButtons();
+    this._createAnswerButtons();
+  }
+
+  _onAnswerSelected(optionIndex) {
+    if (this.isShowingFeedback || this.isLevelComplete) return;
+
+    const question = this.questionDisplay.question;
+    const isCorrect = optionIndex === question.correct;
+
+    // 播放音效
+    this.game.audio.playSFX(isCorrect ? 'success' : 'error');
+
+    if (isCorrect) {
+      this._showFeedback(true);
+      this.correctAnimProgress = 0;
+
+      // 正确后延迟进入下一题
+      setTimeout(() => {
+        this._clearFeedback();
+        this._loadQuestion(this.currentQuestionIndex + 1);
+      }, 1200);
+    } else {
+      this.wrongAnswers++;
+      this.lives--;
+      this._showFeedback(false);
+
+      // 震动效果
+      this.shakeOffset = 10;
+      setTimeout(() => { this.shakeOffset = 0; }, 300);
+
+      if (this.lives <= 0) {
+        // 游戏结束
+        setTimeout(() => {
+          this._onLevelFailed();
+        }, 1500);
+      } else {
+        // 更新生命显示
+        this.livesDisplay.setText('生命: ' + '❤️'.repeat(this.lives) + '🖤'.repeat(3 - this.lives));
+        setTimeout(() => {
+          this._clearFeedback();
+        }, 1500);
+      }
+    }
+  }
+
+  _showFeedback(isCorrect) {
+    this.isShowingFeedback = true;
+    this.feedbackDisplay.isCorrect = isCorrect;
+    this.feedbackDisplay.alpha = 1;
+    this.feedbackDisplay.scale = 0;
+
+    // 动画效果
+    this.game.tweens.add(this.feedbackDisplay, { scale: 1.2, alpha: 1 }, 200, 'easeOutBack');
+
+    if (isCorrect) {
+      // 粒子效果
+      this.game.particleSystem.confetti(this.feedbackDisplay.x, this.feedbackDisplay.y);
+    }
+  }
+
+  _clearFeedback() {
+    this.isShowingFeedback = false;
+    this.feedbackDisplay.alpha = 0;
+    this.feedbackDisplay.scale = 0;
+  }
+
+  _onLevelComplete() {
+    this.isLevelComplete = true;
+
+    // 计算星星
+    const stars = Math.max(1, 3 - this.wrongAnswers);
+
+    // 保存进度
+    LearningProgress.setLevelStars(this.subject, this.level, stars);
+
+    // 显示奖励面板
+    this.showRewardPanel = true;
+    this.earnedStars = stars;
+
+    // 庆祝动画
+    this.game.particleSystem.confetti(CONFIG.CANVAS_WIDTH / 2, CONFIG.CANVAS_HEIGHT / 2);
+    this.game.audio.playSFX('success');
+
+    this._createRewardPanel();
+  }
+
+  _onLevelFailed() {
+    this.isLevelComplete = true;
+
+    // 保存进度（0星）
+    LearningProgress.setLevelStars(this.subject, this.level, 0);
+
+    // 显示失败面板
+    this.showRewardPanel = true;
+    this.earnedStars = 0;
+
+    this._createRewardPanel(true);
+  }
+
+  _createRewardPanel(isFailed = false) {
+    // 隐藏答案按钮
+    this._clearAnswerButtons();
+
+    // 背景遮罩
+    this.rewardOverlay = {
+      alpha: 0,
+      render: function(ctx) {
+        if (this.alpha <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+        ctx.restore();
+      }
+    };
+    this.uiElements.push(this.rewardOverlay);
+    this.game.tweens.add(this.rewardOverlay, { alpha: 0.8 }, 300, 'easeOut');
+
+    // 奖励面板
+    this.rewardPanel = {
+      x: CONFIG.CANVAS_WIDTH / 2,
+      y: CONFIG.CANVAS_HEIGHT + 300,
+      width: 500,
+      height: 400,
+      render: function(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // 面板背景
+        ctx.fillStyle = '#FFFFFF';
+        ctx.shadowColor = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.roundRect(-this.width / 2, -this.height / 2, this.width, this.height, 20);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // 标题
+        ctx.fillStyle = '#333333';
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(isFailed ? '再接再厉！' : '恭喜过关！', 0, -140);
+
+        // 星星显示
+        ctx.font = '40px Arial';
+        ctx.fillText('★'.repeat(this.earnedStars || 0) + '☆'.repeat(3 - (this.earnedStars || 0)), 0, -80);
+
+        if (!isFailed) {
+          // 奖励选项
+          const rewards = this.rewards || [];
+          const rewardWidth = 130;
+          const startX = -((rewards.length - 1) * rewardWidth) / 2;
+
+          rewards.forEach((reward, i) => {
+            const rx = startX + i * rewardWidth;
+            const ry = 30;
+
+            // 奖励背景
+            ctx.fillStyle = '#E8F5E9';
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(rx - 55, ry - 50, 110, 100, 10);
+            ctx.fill();
+            ctx.stroke();
+
+            // 奖励图标
+            ctx.font = '36px Arial';
+            ctx.fillText(reward.icon, rx, ry - 10);
+
+            // 奖励名称
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.fillText(reward.name, rx, ry + 35);
+          });
+        }
+
+        ctx.restore();
+      },
+      rewards: this._generateRewards()
+    };
+    this.uiElements.push(this.rewardPanel);
+    this.game.tweens.add(this.rewardPanel, { y: CONFIG.CANVAS_HEIGHT / 2 }, 400, 'easeOutBack');
+
+    // 重新挑战按钮
+    const retryBtn = new Button(CONFIG.CANVAS_WIDTH / 2 - 75, CONFIG.CANVAS_HEIGHT / 2 + 180, 150, 50, isFailed ? '重新挑战' : '返回');
+    retryBtn.backgroundColor = isFailed ? '#FF9800' : '#4CAF50';
+    retryBtn.onClick = () => {
+      if (isFailed) {
+        // 重新开始当前关卡
+        this._resetLevel();
+      } else {
+        // 返回花园
+        this.game.changeScene(this._getGardenScene());
+      }
+    };
+    this.uiElements.push(retryBtn);
+  }
+
+  _generateRewards() {
+    if (this.earnedStars === 0) return [];
+
+    const rewardPool = [
+      { id: 'fragment_1', name: '角色碎片', icon: '🧩' },
+      { id: 'fragment_2', name: '角色碎片', icon: '🧩' },
+      { id: 'deco_1', name: '小花朵', icon: '🌸' },
+      { id: 'deco_2', name: '小树苗', icon: '🌱' },
+      { id: 'item_1', name: '双倍卡', icon: '✨' },
+      { id: 'item_2', name: '跳过卡', icon: '⏭️' },
+    ];
+
+    const count = this.earnedStars;
+    const rewards = [];
+    const shuffled = [...rewardPool].sort(() => Math.random() - 0.5);
+
+    for (let i = 0; i < count && i < shuffled.length; i++) {
+      rewards.push(shuffled[i]);
+    }
+
+    return rewards;
+  }
+
+  _resetLevel() {
+    // 移除奖励面板
+    this.uiElements = this.uiElements.filter(el => 
+      el !== this.rewardOverlay && 
+      el !== this.rewardPanel &&
+      !el.retryBtn
+    );
+
+    this.rewardOverlay = null;
+    this.rewardPanel = null;
+
+    // 重置状态
+    this.currentQuestionIndex = 0;
+    this.lives = 3;
+    this.wrongAnswers = 0;
+    this.isLevelComplete = false;
+    this.showRewardPanel = false;
+    this.earnedStars = 0;
+
+    // 重新创建UI
+    this._createUI();
+  }
+
+  _getGardenScene() {
+    switch(this.subject) {
+      case 'math': return SceneType.MATH_GARDEN;
+      case 'chinese': return SceneType.CHINESE_GARDEN;
+      case 'english': return SceneType.ENGLISH_GARDEN;
+      case 'logic': return SceneType.LOGIC_GARDEN;
+      default: return SceneType.GARDEN;
+    }
+  }
+
+  update(dt) {
+    super.update(dt);
+
+    // 震动效果
+    if (this.shakeOffset !== 0) {
+      this.shakeOffset *= 0.9;
+      if (this.shakeOffset < 0.5) this.shakeOffset = 0;
+    }
+
+    // 正确动画进度
+    if (this.correctAnimProgress > 0) {
+      this.correctAnimProgress += dt / 1000;
+    }
+  }
+
+  render(ctx) {
+    // 背景
+    this._renderBackground(ctx);
+
+    // 应用震动
+    ctx.save();
+    if (this.shakeOffset !== 0) {
+      ctx.translate(
+        (Math.random() - 0.5) * this.shakeOffset * 2,
+        (Math.random() - 0.5) * this.shakeOffset * 2
+      );
+    }
+
+    // 渲染UI元素
+    for (const ui of this.uiElements) {
+      if (ui !== this.rewardOverlay && ui !== this.rewardPanel) {
+        ui.render(ctx);
+      }
+    }
+
+    // 渲染奖励面板（最上层）
+    if (this.rewardOverlay) this.rewardOverlay.render(ctx);
+    if (this.rewardPanel) this.rewardPanel.render(ctx);
+
+    ctx.restore();
+
+    // 粒子效果
+    this.game.particleSystem.render(ctx);
+  }
+
+  _renderBackground(ctx) {
+    // 学习场景使用简单的渐变背景
+    const gradient = ctx.createLinearGradient(0, 0, 0, CONFIG.CANVAS_HEIGHT);
+    gradient.addColorStop(0, '#E3F2FD');
+    gradient.addColorStop(1, '#BBDEFB');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, CONFIG.CANVAS_WIDTH, CONFIG.CANVAS_HEIGHT);
+
+    // 装饰图案
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(50, 100, 30, 0, Math.PI * 2);
+    ctx.arc(100, 80, 20, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(650, 200, 25, 0, Math.PI * 2);
+    ctx.arc(700, 180, 18, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(80, 600, 35, 0, Math.PI * 2);
+    ctx.arc(140, 580, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(620, 700, 28, 0, Math.PI * 2);
+    ctx.arc(680, 680, 20, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  onPointerDown(x, y, pointer) {
+    for (const ui of this.uiElements) {
+      if (ui.handlePointerDown && ui.handlePointerDown(x, y)) {
+        return;
+      }
+    }
+  }
+}
+
+// 静态方法：绘制题目图片
+LearningScene._drawQuestionImage = function(ctx, x, y, imageType) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  switch(imageType) {
+    case 'apple':
+      ctx.fillStyle = '#F44336';
+      ctx.beginPath();
+      ctx.arc(0, 0, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#4CAF50';
+      ctx.fillRect(-2, -18, 4, 8);
+      break;
+
+    case 'flower':
+      ctx.fillStyle = '#E91E63';
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(angle) * 8, Math.sin(angle) * 8, 6, 4, angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#FFEB3B';
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'star':
+      ctx.fillStyle = '#FFEB3B';
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+        const px = Math.cos(angle) * 12;
+        const py = Math.sin(angle) * 12;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'balloon':
+      ctx.fillStyle = '#9C27B0';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 12, 15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#666';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, 15);
+      ctx.lineTo(0, 25);
+      ctx.stroke();
+      break;
+
+    case 'bird':
+      ctx.fillStyle = '#87CEEB';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 12, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(8, -5, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFD700';
+      ctx.beginPath();
+      ctx.moveTo(14, -5);
+      ctx.lineTo(18, -5);
+      ctx.lineTo(14, -3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.arc(10, -6, 2, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'circle':
+      ctx.fillStyle = '#2196F3';
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'square':
+      ctx.fillStyle = '#FF9800';
+      ctx.fillRect(-12, -12, 24, 24);
+      break;
+
+    case 'triangle':
+      ctx.fillStyle = '#4CAF50';
+      ctx.beginPath();
+      ctx.moveTo(0, -15);
+      ctx.lineTo(15, 12);
+      ctx.lineTo(-15, 12);
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'hexagon':
+      ctx.fillStyle = '#9C27B0';
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(angle) * 14;
+        const py = Math.sin(angle) * 14;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'pentagon':
+      ctx.fillStyle = '#00BCD4';
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const angle = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(angle) * 14;
+        const py = Math.sin(angle) * 14;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'octagon':
+      ctx.fillStyle = '#FF5722';
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(angle) * 14;
+        const py = Math.sin(angle) * 14;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'heptagon':
+      ctx.fillStyle = '#795548';
+      ctx.beginPath();
+      for (let i = 0; i < 7; i++) {
+        const angle = (i / 7) * Math.PI * 2 - Math.PI / 2;
+        const px = Math.cos(angle) * 14;
+        const py = Math.sin(angle) * 14;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    case 'dog':
+      ctx.fillStyle = '#8D6E63';
+      ctx.beginPath();
+      ctx.arc(0, 0, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-12, -5, 5, 0, Math.PI * 2);
+      ctx.arc(12, -5, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.arc(-5, -3, 3, 0, Math.PI * 2);
+      ctx.arc(5, -3, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(0, 5, 4, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'cat':
+      ctx.fillStyle = '#FF9800';
+      ctx.beginPath();
+      ctx.arc(0, 0, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-15, -10);
+      ctx.lineTo(-8, -25);
+      ctx.lineTo(-3, -10);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(15, -10);
+      ctx.lineTo(8, -25);
+      ctx.lineTo(3, -10);
+      ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.ellipse(-5, -3, 3, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(5, -3, 3, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'car':
+      ctx.fillStyle = '#F44336';
+      ctx.fillRect(-18, -5, 36, 15);
+      ctx.fillRect(-12, -12, 24, 10);
+      ctx.fillStyle = '#2196F3';
+      ctx.fillRect(-10, -10, 8, 6);
+      ctx.fillRect(2, -10, 8, 6);
+      ctx.fillStyle = '#333';
+      ctx.beginPath();
+      ctx.arc(-10, 12, 5, 0, Math.PI * 2);
+      ctx.arc(10, 12, 5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+
+    case 'book':
+      ctx.fillStyle = '#795548';
+      ctx.fillRect(-15, -12, 30, 24);
+      ctx.fillStyle = '#FFF';
+      ctx.fillRect(-12, -9, 24, 18);
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(-10, -6 + i * 6);
+        ctx.lineTo(10, -6 + i * 6);
+        ctx.stroke();
+      }
+      break;
+
+    case 'sun':
+      ctx.fillStyle = '#FFEB3B';
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#FFEB3B';
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * 15, Math.sin(angle) * 15);
+        ctx.lineTo(Math.cos(angle) * 22, Math.sin(angle) * 22);
+        ctx.stroke();
+      }
+      break;
+
+    case 'letter_A':
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('A', 0, 0);
+      break;
+
+    case 'letter_B':
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('B', 0, 0);
+      break;
+
+    case 'letter_C':
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 28px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('C', 0, 0);
+      break;
+
+    case 'tree':
+      ctx.fillStyle = '#795548';
+      ctx.fillRect(-4, 5, 8, 15);
+      ctx.fillStyle = '#4CAF50';
+      ctx.beginPath();
+      ctx.moveTo(0, -20);
+      ctx.lineTo(18, 10);
+      ctx.lineTo(-18, 10);
+      ctx.closePath();
+      ctx.fill();
+      break;
+
+    default:
+      // 默认圆点
+      ctx.fillStyle = '#9E9E9E';
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.fill();
+  }
+
+  ctx.restore();
+};
 
 // ============================================================
 // 游戏主类
