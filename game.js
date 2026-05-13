@@ -2508,9 +2508,8 @@ class GardenScene extends Scene {
 
     // 学习花园入口按钮
     const learnBtn = new Button(60, 240, CONFIG.CANVAS_WIDTH - 120, 80, '学习花园');
+    learnBtn.backgroundColor = '#7CB342';
     learnBtn.onClick = () => this.game.changeScene(SceneType.MATH_GARDEN);
-    learnBtn.bgColor = '#7CB342';
-    learnBtn.textColor = '#FFFFFF';
     this.uiElements.push(learnBtn);
 
     // 土地说明
