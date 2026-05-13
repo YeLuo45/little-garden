@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Little Garden - QUnit Tests</title>
+  <link rel="stylesheet" href="https://code.jquery.com/qunit/qunit-3.1.2.css">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    #qunit {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: auto;
+    }
+    #qunit-fixture {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="qunit"></div>
+  <canvas id="gameCanvas" style="display:none;"></canvas>
+  
+  <script src="https://code.jquery.com/qunit/qunit-3.1.2.js"></script>
+  <script src="../../game.js"></script>
+  <script src="ui-element.test.js"></script>
+  <script src="scene.test.js"></script>
+  <script src="learning.test.js"></script>
+</body>
+</html>
