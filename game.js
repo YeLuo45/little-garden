@@ -2520,9 +2520,6 @@ class GardenScene extends Scene {
       align: 'center',
     });
     this.uiElements.push(hintText);
-
-    // 创建土地格
-    this._createPlots();
   }
 
   _createPetUI() {
